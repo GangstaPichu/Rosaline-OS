@@ -141,8 +141,10 @@ disk; the same `just build-vm-image && just boot-check` applies there.
 - **VM testing**: see "Build verification status" above — the smoke
   flavor is verified end to end; the Bazzite-based image is verified
   through the container build and needs a machine with more disk for
-  `just build-vm-image && just boot-check`. CI is manual-only (private
-  repo on the free tier); the justfile is the primary path.
+  `just build-vm-image && just boot-check`. CI (`boot-test.yml`) can
+  now do this too since the repo went public (unlimited Actions
+  minutes) — still `workflow_dispatch`-only by choice, not by quota, so
+  the justfile stays the primary path for day-to-day iteration.
 - **Package list**: `build_files/build.sh` currently adds Cinnamon plus a
   couple of Mint-style utilities (Nemo, Timeshift, GNOME Disks). Further
   Nobara-specific packages not already covered by the Bazzite base
