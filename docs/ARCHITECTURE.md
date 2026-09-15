@@ -152,8 +152,9 @@ disk; the same `just build-vm-image && just boot-check` applies there.
   a second Containerfile/base-image pairing could produce a
   Deck-like Rosaline OS variant later if wanted.
 - **Security**: see "Security architecture" below — image signing, base
-  verification, and client-side enforcement are done; pending is
-  actually rotating in a production keypair if the one generated during
+  verification, and client-side enforcement are done and confirmed with
+  a real green CI run (not just the sandbox); pending is actually
+  rotating in a production keypair if the one generated during
   development should be replaced, and deciding whether to also pin
   `bootc-image-builder`/`fedora-bootc`/`registry:2` OCI *images* by
   digest in the workflows and justfile (currently pulled by mutable tag
@@ -177,6 +178,35 @@ image against that key before building (`cosign verify --key
 security/ublue-bazzite-cosign.pub --new-bundle-format=false`), and
 signs the finished image with Rosaline OS's own key afterward
 (`secrets.SIGNING_SECRET`).
+
+**Confirmed in real CI**, not just the sandbox: `build.yml` run
+[#8](https://github.com/GangstaPichu/Rosaline-OS/actions/runs/35012539566)
+went green end to end (base-image verify → build → push → sign), and the
+result was independently checked outside that run too —
+`cosign verify --key cosign.pub --new-bundle-format=false
+ghcr.io/gangstapichu/rosaline-os:latest` against the real published image
+reports "The signatures were verified against the specified public key",
+and `skopeo inspect --no-creds` confirms the image pulls without
+credentials, which a fresh `bootc switch` needs. Getting here surfaced
+two more real bugs neither local testing nor review had caught:
+
+1. Every run of this workflow ever, across five unrelated commits, had
+   failed in 4-5 seconds with no logs. Cause: the repo was private on
+   GitHub's Free plan, which caps included Actions minutes with a $0
+   default spending limit for overage — every run failed before a
+   runner even started. Fixed by making the repo public (unlimited
+   Actions minutes; no code change).
+2. The first real run then got through base verification and the build,
+   but failed pushing: `Invalid image name
+   ghcr.io/GangstaPichu/rosaline-os:latest, unknown transport
+   ghcr.io/GangstaPichu/rosaline-os`. `github.repository_owner` is
+   `GangstaPichu` (mixed case), and GHCR/OCI references must be
+   all-lowercase — reproduced locally against the same podman version
+   to confirm before fixing. GitHub Actions expressions have no
+   built-in lowercase function, so all three workflows now compute
+   `IMAGE_REGISTRY` in a shell step (`tr '[:upper:]' '[:lower:]'`) and
+   export it via `$GITHUB_ENV` instead of interpolating
+   `${{ github.repository_owner }}` directly.
 
 **Client-side enforcement.** `system_files/etc/containers/policy.json`
 and `system_files/etc/containers/registries.d/rosaline-os.yaml` scope a
