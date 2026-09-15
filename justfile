@@ -29,6 +29,15 @@ build-smoke:
         --build-arg BASE_IMAGE={{smoke_base}} --build-arg BASE_TAG={{smoke_tag}} \
         -t {{image_name}}:smoke -f Containerfile .
 
+# Verify and pull the published, signed image from GHCR, tagging it
+# locally as localhost/rosaline-os:<tag> so build-vm-image can use it
+# without a local rebuild -- the fastest way to test what CI actually
+# published, and the recommended starting point (needs cosign).
+pull-published tag=default_tag owner="gangstapichu":
+    cosign verify --key cosign.pub --new-bundle-format=false ghcr.io/{{owner}}/{{image_name}}:{{tag}}
+    podman pull ghcr.io/{{owner}}/{{image_name}}:{{tag}}
+    podman tag ghcr.io/{{owner}}/{{image_name}}:{{tag}} localhost/{{image_name}}:{{tag}}
+
 # Turn an already-built image into a bootable qcow2 test disk (throwaway
 # rosaline/rosaline dev account baked in via vm.toml -- see that file).
 # Run `build` or `build-smoke` first.
