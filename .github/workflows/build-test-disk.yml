@@ -54,6 +54,10 @@ jobs:
         run: |
           mkdir -p output
           TAG="${{ github.event.inputs.tag || 'latest' }}"
+          # bootc-image-builder no longer pulls its target image itself
+          # (found by actually running this workflow) -- it must already
+          # be in local podman storage first.
+          sudo podman pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
           sudo podman run --rm --privileged --pull=newer \
             --security-opt label=type:unconfined_t \
             -v "$PWD/output:/output" \

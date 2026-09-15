@@ -38,6 +38,10 @@ jobs:
       - name: Build ISO with bootc-image-builder
         run: |
           mkdir -p output
+          # bootc-image-builder no longer pulls its target image itself
+          # (found by actually running this pattern in another workflow)
+          # -- it must already be in local podman storage first.
+          sudo podman pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
           sudo podman run --rm --privileged \
             --pull=newer \
             --security-opt label=type:unconfined_t \
