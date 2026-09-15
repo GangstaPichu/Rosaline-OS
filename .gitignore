@@ -1,4 +1,5 @@
 output/
 *.iso
 *.qcow2
+*.log
 .vagrant/

@@ -1,0 +1,117 @@
+name: Boot-test Rosaline OS image
+
+# Smoke-tests that the published image actually boots, not just that it
+# built. Builds a throwaway qcow2 test disk (see vm.toml) from the image
+# and boots it headless in QEMU, watching the serial console for the
+# marker rosaline-boot-marker.service prints once multi-user.target is
+# reached.
+on:
+  workflow_run:
+    workflows: ["Build Rosaline OS image"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to boot-test"
+        default: "latest"
+        required: false
+
+env:
+  IMAGE_NAME: rosaline-os
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  BOOT_TIMEOUT_SECONDS: 480
+  BOOT_MARKER: ROSALINE-OS-BOOT-OK
+
+jobs:
+  boot-test:
+    name: Boot in QEMU
+    runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          swap-storage: false
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 ovmf
+
+      - name: Enable KVM if available
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo "kvm available"
+            sudo chmod 666 /dev/kvm
+            echo "KVM_FLAGS=-enable-kvm -cpu host" >> "$GITHUB_ENV"
+          else
+            echo "no /dev/kvm on this runner -- using slower software emulation"
+            echo "KVM_FLAGS=" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build qcow2 test disk
+        run: |
+          mkdir -p output
+          TAG="${{ github.event.inputs.tag || 'latest' }}"
+          sudo podman run --rm --privileged --pull=newer \
+            --security-opt label=type:unconfined_t \
+            -v "$PWD/output:/output" \
+            -v "$PWD/vm.toml:/config.toml:ro" \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            quay.io/centos-bootc/bootc-image-builder:latest \
+            --type qcow2 \
+            --config /config.toml \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
+
+      - name: Boot and wait for marker
+        run: |
+          set -x
+          qemu-system-x86_64 $KVM_FLAGS \
+            -m 8G -smp 4 \
+            -drive file=output/qcow2/disk.qcow2,if=virtio,format=qcow2 \
+            -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
+            -display none -serial file:serial.log -no-reboot &
+          qemu_pid=$!
+
+          deadline=$(( $(date +%s) + BOOT_TIMEOUT_SECONDS ))
+          found=0
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            if [ -f serial.log ] && grep -q "$BOOT_MARKER" serial.log; then
+              found=1
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              echo "QEMU exited early" >&2
+              break
+            fi
+            sleep 5
+          done
+
+          kill "$qemu_pid" 2>/dev/null || true
+          wait "$qemu_pid" 2>/dev/null || true
+
+          if [ "$found" -ne 1 ]; then
+            echo "Boot marker '$BOOT_MARKER' not seen within ${BOOT_TIMEOUT_SECONDS}s" >&2
+            exit 1
+          fi
+          echo "Boot marker seen -- image boots to multi-user.target."
+
+      - name: Upload serial console log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-test-serial-log
+          path: serial.log
+          retention-days: 14

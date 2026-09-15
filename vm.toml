@@ -1,0 +1,19 @@
+# bootc-image-builder config for local/CI *test* VM disks only (see
+# `just build-vm-image` / .github/workflows/boot-test.yml). Do NOT reuse
+# this for the real installer ISO -- iso.toml stays separate on purpose
+# so a real install always goes through Anaconda's normal interactive
+# user-creation screen instead of getting this throwaway account.
+#
+# Bakes in a disposable "rosaline" / "rosaline" account (password login,
+# wheel/sudo) purely so a test VM can be SSH'd into or logged into at the
+# console. Never ship an image built with this config, and never reuse
+# this password for anything real.
+[[customizations.user]]
+name = "rosaline"
+password = "rosaline"
+groups = ["wheel"]
+
+# If your bootc-image-builder version rejects a plaintext password (some
+# builds require a pre-hashed one), replace the line above with a hash:
+#   openssl passwd -6 rosaline
+# and paste the "$6$..." result in as `password` instead.

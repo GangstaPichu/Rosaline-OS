@@ -41,4 +41,10 @@ plymouth-set-default-theme -R rosaline-os
 dconf update
 gtk-update-icon-cache -f /usr/share/icons/hicolor || true
 
+# Boot-test marker: lets CI/local VM smoke tests (see boot-test.yml,
+# `just boot-headless`) detect a successful boot deterministically by
+# watching the serial console for a fixed string, instead of guessing at
+# getty prompt text.
+systemctl enable rosaline-boot-marker.service
+
 echo "Rosaline OS build steps complete."

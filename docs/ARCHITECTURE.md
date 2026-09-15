@@ -71,10 +71,18 @@ property that both Bazzite and SteamOS rely on.
 
 - **Branding**: done for a first pass — logo/icon, wallpaper, and a
   Plymouth boot theme live in `system_files/` (sources + regeneration
-  script in `assets/branding/`). The Plymouth theme hasn't been boot-tested
-  on real hardware/a VM yet (this dev environment can't run Plymouth), and
-  it doesn't implement a LUKS password prompt — see `assets/branding/README.md`
-  and the comment at the top of `rosaline-os.script`.
+  script in `assets/branding/`). It doesn't implement a LUKS password
+  prompt — see `assets/branding/README.md` and the comment at the top of
+  `rosaline-os.script`.
+- **Local/CI VM testing**: `just build-vm-image` / `just boot` /
+  `just boot-headless` (see README) build a throwaway qcow2 via
+  `vm.toml` and boot it in QEMU; `.github/workflows/boot-test.yml` does
+  the headless version automatically after every image build, watching
+  for a marker (`rosaline-boot-marker.service`) instead of guessing at
+  console text. None of this has been run yet as of this writing — it
+  was authored in a sandbox with no podman, qemu, or `/dev/kvm` to test
+  against, so treat the first real run (local or CI) as the actual
+  first test of this tooling, not just of the image.
 - **Package list**: `build_files/build.sh` currently adds Cinnamon plus a
   couple of Mint-style utilities (Nemo, Timeshift, GNOME Disks). Further
   Nobara-specific packages not already covered by the Bazzite base

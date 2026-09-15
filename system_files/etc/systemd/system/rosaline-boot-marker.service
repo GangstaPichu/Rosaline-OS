@@ -1,0 +1,11 @@
+[Unit]
+Description=Print a marker line to the console once boot reaches multi-user.target
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo ROSALINE-OS-BOOT-OK > /dev/console'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
