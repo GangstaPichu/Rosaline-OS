@@ -69,8 +69,12 @@ property that both Bazzite and SteamOS rely on.
 
 ## Open questions / next steps
 
-- **Branding**: wallpapers, Plymouth boot theme, and a real logo still
-  need to be added under `system_files/`.
+- **Branding**: done for a first pass — logo/icon, wallpaper, and a
+  Plymouth boot theme live in `system_files/` (sources + regeneration
+  script in `assets/branding/`). The Plymouth theme hasn't been boot-tested
+  on real hardware/a VM yet (this dev environment can't run Plymouth), and
+  it doesn't implement a LUKS password prompt — see `assets/branding/README.md`
+  and the comment at the top of `rosaline-os.script`.
 - **Package list**: `build_files/build.sh` currently adds Cinnamon plus a
   couple of Mint-style utilities (Nemo, Timeshift, GNOME Disks). Further
   Nobara-specific packages not already covered by the Bazzite base

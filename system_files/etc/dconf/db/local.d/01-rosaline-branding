@@ -1,0 +1,12 @@
+# Rosaline OS default wallpaper. This is a *default*, not a lock — users
+# can still change it from Settings. To make it non-overridable instead,
+# add a matching key list under /etc/dconf/db/local.d/locks/.
+
+[org/cinnamon/desktop/background]
+picture-uri='file:///usr/share/backgrounds/rosaline-os/rosaline-default.png'
+picture-options='zoom'
+
+[org/gnome/desktop/background]
+picture-uri='file:///usr/share/backgrounds/rosaline-os/rosaline-default.png'
+picture-uri-dark='file:///usr/share/backgrounds/rosaline-os/rosaline-default.png'
+picture-options='zoom'

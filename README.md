@@ -18,8 +18,9 @@ way instead of starting from Arch or Debian.
 ## Status
 
 Early scaffold. The image builds and boots on top of Bazzite's Nvidia
-variant with a Cinnamon session layered in; package selection, branding,
-and Mint-style polish are still being filled in.
+variant with a Cinnamon session layered in, and now has a first pass of
+branding (icon, wallpaper, boot splash — see `assets/branding/`). Package
+selection and further Mint-style polish are still being filled in.
 
 ## Repository layout
 
@@ -28,6 +29,7 @@ Containerfile           # Image definition (FROM Bazzite, layer build_files/)
 build_files/build.sh     # Packages/config installed into the image
 build_files/cleanup.sh   # Post-install cleanup
 system_files/            # Static files copied verbatim to /
+assets/branding/         # Editable logo/wallpaper/boot-theme sources + render.py
 iso.toml                 # bootc-image-builder config for ISO installer output
 justfile                 # Local build/lint/rebase commands (podman + just)
 .github/workflows/       # CI: build+push OCI image, build installer ISO

@@ -28,5 +28,17 @@ dnf5 install -y \
 # and ublue compatibility fields other tooling relies on.
 sed -i "s/^NAME=.*/NAME=\"Rosaline OS\"/" /usr/lib/os-release
 sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Rosaline OS\"/" /usr/lib/os-release
+grep -q '^LOGO=' /usr/lib/os-release || echo 'LOGO=rosaline-os' >> /usr/lib/os-release
+grep -q '^ANSI_COLOR=' /usr/lib/os-release || echo 'ANSI_COLOR="0;35"' >> /usr/lib/os-release
+
+# Boot splash: install as the default Plymouth theme and rebuild the
+# initramfs (-R) so it's actually picked up.
+plymouth-set-default-theme -R rosaline-os
+
+# Wallpaper: system_files/ already dropped the dconf keys and the PNG in
+# place; compile the dconf db so the default takes effect, and refresh
+# the icon theme cache so desktops pick up the new hicolor icons.
+dconf update
+gtk-update-icon-cache -f /usr/share/icons/hicolor || true
 
 echo "Rosaline OS build steps complete."

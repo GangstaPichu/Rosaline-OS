@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3840 2160" width="3840" height="2160">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#100C13"/>
+      <stop offset="55%" stop-color="#1B1420"/>
+      <stop offset="100%" stop-color="#2A1526"/>
+    </linearGradient>
+
+    <radialGradient id="auraRose" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E0355F" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#E0355F" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="auraViolet" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7C4DBB" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#7C4DBB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="auraGold" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#E0A83A" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#E0A83A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="auraTeal" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2E9CA6" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#2E9CA6" stop-opacity="0"/>
+    </radialGradient>
+
+    <path id="petal" d="M 256,258
+      C 214,236 190,178 205,112
+      C 213,78 232,56 256,44
+      C 274,64 288,92 288,130
+      C 288,182 278,228 256,258 Z"/>
+  </defs>
+
+  <rect width="3840" height="2160" fill="url(#bg)"/>
+
+  <!-- soft colour aura cluster, bottom-right -->
+  <circle cx="2980" cy="1530" r="620" fill="url(#auraRose)"/>
+  <circle cx="3220" cy="1350" r="560" fill="url(#auraViolet)"/>
+  <circle cx="3060" cy="1750" r="560" fill="url(#auraGold)"/>
+  <circle cx="2760" cy="1370" r="520" fill="url(#auraTeal)"/>
+
+  <!-- faint echo aura, top-left, for balance -->
+  <circle cx="520" cy="360" r="420" fill="url(#auraTeal)" opacity="0.6"/>
+  <circle cx="360" cy="560" r="380" fill="url(#auraViolet)" opacity="0.5"/>
+
+  <!-- watermark-scale bloom mark sitting inside the main aura -->
+  <g opacity="0.4" transform="translate(2450,1000) scale(2.6) rotate(-10)">
+    <use href="#petal" fill="#E0355F" transform="rotate(0 256 256)"/>
+    <use href="#petal" fill="#7C4DBB" transform="rotate(82 256 256)"/>
+    <use href="#petal" fill="#E0A83A" transform="rotate(172 256 256)"/>
+    <use href="#petal" fill="#2E9CA6" transform="rotate(262 256 256)"/>
+  </g>
+</svg>
