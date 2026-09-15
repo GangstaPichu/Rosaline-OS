@@ -31,8 +31,12 @@ sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Rosaline OS\"/" /usr/lib/os-release
 grep -q '^LOGO=' /usr/lib/os-release || echo 'LOGO=rosaline-os' >> /usr/lib/os-release
 grep -q '^ANSI_COLOR=' /usr/lib/os-release || echo 'ANSI_COLOR="0;35"' >> /usr/lib/os-release
 
-# Boot splash: install as the default Plymouth theme and rebuild the
-# initramfs (-R) so it's actually picked up.
+# Boot splash: the "script" plugin our theme uses (ModuleName=script in
+# rosaline-os.plymouth) isn't installed by the Bazzite base -- without it
+# plymouth-set-default-theme fails with "script.so does not exist".
+# Install it, then set the theme as default and rebuild the initramfs
+# (-R) so it's actually picked up.
+dnf5 install -y plymouth-plugin-script
 plymouth-set-default-theme -R rosaline-os
 
 # Wallpaper: system_files/ already dropped the dconf keys and the PNG in
