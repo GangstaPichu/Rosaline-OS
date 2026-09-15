@@ -1,0 +1,83 @@
+name: Build downloadable test disk
+
+# Produces a bootable qcow2 disk from the published image and uploads it
+# as a workflow artifact, for testing on a machine where none of
+# podman/bootc-image-builder/WSL2/KVM are available or wanted -- notably
+# Windows without Hyper-V enabled. Boot the download with a native
+# Windows QEMU build in pure software-emulation mode (no WHPX, no
+# hardware virtualization at all, so it can't touch whatever makes
+# Hyper-V itself unstable on that machine): see README.md's
+# "Testing on Windows without Hyper-V" section.
+#
+# This does the same conversion as boot-test.yml but keeps producing a
+# downloadable artifact as a separate concern from CI's own headless
+# boot-check, and skips the boot-check here so a slow artifact upload
+# isn't blocked behind it.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to convert"
+        default: "latest"
+        required: false
+
+env:
+  IMAGE_NAME: rosaline-os
+
+jobs:
+  build-disk:
+    name: Build and upload qcow2
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Compute lowercase image registry
+        # See the same step in build.yml -- github.repository_owner
+        # isn't lowercase and GHCR/OCI references must be.
+        run: echo "IMAGE_REGISTRY=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          swap-storage: false
+
+      - name: Build qcow2 test disk
+        run: |
+          mkdir -p output
+          TAG="${{ github.event.inputs.tag || 'latest' }}"
+          sudo podman run --rm --privileged --pull=newer \
+            --security-opt label=type:unconfined_t \
+            -v "$PWD/output:/output" \
+            -v "$PWD/vm.toml:/config.toml:ro" \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            quay.io/centos-bootc/bootc-image-builder:latest \
+            --type qcow2 \
+            --rootfs ext4 \
+            --config /config.toml \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
+          ls -la output/qcow2/
+
+      - name: Compress the disk image
+        # qcow2 is already sparse, but OS content still compresses
+        # meaningfully -- worth the extra CI minutes to cut download
+        # time on the other end. .gz opens natively in 7-Zip/Windows.
+        run: |
+          cd output/qcow2
+          gzip -k disk.qcow2
+          ls -la
+
+      - name: Upload compressed disk image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rosaline-os-test-disk
+          path: output/qcow2/disk.qcow2.gz
+          retention-days: 7

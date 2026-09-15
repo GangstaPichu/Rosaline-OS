@@ -101,11 +101,49 @@ exit 0 if the VM reaches `multi-user.target`, serial console in
 ### CI
 
 The workflows in `.github/workflows/` are manual-only
-(`workflow_dispatch`): this repo is private on GitHub's free tier, where
-Actions minutes are capped, and one image build would burn a large
-chunk of them. Everything they do is available locally through the
-justfile. Making the repo public would give unlimited Actions minutes
-if automatic builds are ever wanted.
+(`workflow_dispatch`) by choice, not necessity — the repo is public, so
+Actions minutes are unlimited, but nothing should fire without someone
+asking for it. Everything they do is also available locally through the
+justfile.
+
+### Testing on Windows without Hyper-V
+
+If WSL2 isn't an option (it's built on Hyper-V, so if Hyper-V itself is
+the problem — e.g. it's been causing bluescreens with other
+software/games — WSL2 will hit the same issue), let CI do the only step
+that actually needs real Linux, and just boot the result locally:
+
+1. **Actions tab → "Build downloadable test disk" → Run workflow.**
+   This pulls the published image, converts it to a qcow2 with
+   `bootc-image-builder` (needs privileged containers and loop devices
+   — real Linux, which is why this runs in CI rather than on Windows),
+   gzips it, and uploads it as a workflow artifact
+   (`rosaline-os-test-disk`, ~7 day retention). It's a multi-GB
+   download either way; gzip cuts it down some but budget time.
+2. **Download and decompress** the artifact. 7-Zip opens `.gz` directly,
+   or in PowerShell: `tar -xzf disk.qcow2.gz` (Windows 10 1803+ ships a
+   `tar.exe` that handles gzip).
+3. **Install QEMU for Windows** — a *native* Windows build, no WSL:
+   `choco install qemu` (Chocolatey) or `scoop install qemu` (Scoop),
+   or the installer from <https://qemu.weilnetz.de/w64/> (the build
+   linked from qemu.org's own downloads page) if you don't use a
+   package manager.
+4. **Boot it in pure software emulation** — no `-accel whpx`, no
+   `-enable-kvm`, nothing that touches VT-x/AMD-V or the hypervisor
+   layer at all, so it can't trigger whatever makes Hyper-V unstable on
+   that machine. Slower than hardware-accelerated (expect it to feel
+   sluggish, especially at the boot splash), but fine for a one-time
+   "does this actually boot and look right" check:
+   ```powershell
+   qemu-system-x86_64.exe -accel tcg -m 8G -smp 4 `
+     -drive file=disk.qcow2,if=virtio,format=qcow2 `
+     -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0
+   ```
+   Log in with the throwaway `rosaline`/`rosaline` account (from
+   `vm.toml` — never used on a real install).
+
+This disk is for boot-testing only, same as `vm.toml`'s local
+equivalent — never install from it for real.
 
 ## Installing / switching to Rosaline OS
 
@@ -136,6 +174,10 @@ All manual-only (see "CI" above for why):
   (`vm.toml`) from the published image and runs `scripts/boot-check.sh`
   on it — the same check as `just boot-check` — uploading the serial
   console log as an artifact either way.
+- `.github/workflows/build-test-disk.yml` does the same disk conversion
+  but uploads the (gzipped) qcow2 itself as a downloadable artifact
+  instead of boot-checking it — see "Testing on Windows without
+  Hyper-V" above.
 
 All third-party Actions used in these workflows are pinned to a commit
 SHA (not a mutable version tag), fetched fresh from each action's repo
