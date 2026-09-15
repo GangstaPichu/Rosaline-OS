@@ -94,6 +94,15 @@ boot-check timeout="900":
 # (or sandboxes) without room for the full Bazzite-based image.
 smoke: build-smoke (build-vm-image "smoke") boot-check
 
+# `build-vm-image` for kernels without partition-table parsers or vfat
+# (some container sandboxes) -- see scripts/sandbox/build-disk.sh.
+# Produces a BIOS-only disk good for boot-check and nothing else.
+build-vm-image-sandbox tag=default_tag:
+    scripts/sandbox/build-disk.sh {{tag}}
+
+# `smoke`, via the sandbox disk builder.
+smoke-sandbox: build-smoke (build-vm-image-sandbox "smoke") boot-check
+
 # SSH into a running test VM (the throwaway account from vm.toml)
 ssh:
     ssh -p {{ssh_port}} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null rosaline@localhost

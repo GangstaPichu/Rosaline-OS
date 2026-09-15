@@ -75,8 +75,33 @@ disk purely so you can log in — it's never used for the real installer
 ISO (`iso.toml`), and the disk it produces should never be shipped or
 reused for anything real.
 
-CI also boot-tests every build automatically — see
-`.github/workflows/boot-test.yml` below.
+### Smoke flavor (small machines, sandboxes, quick iteration)
+
+The real image sits on a 13 GB Bazzite base. `just smoke` builds the
+same `build_files/` + `system_files/` on a plain 2 GB `fedora-bootc`
+base instead, converts it to a disk, boots it headless, and checks for
+the boot marker — end to end, in one command. It exercises everything
+Rosaline itself adds (package list, Plymouth theme + initramfs, dconf,
+boot marker) but not Bazzite's Nvidia/gamescope/KDE stack, which we
+don't touch anyway.
+
+If your kernel can't create loop partition nodes or mount vfat (some
+container sandboxes), `just smoke-sandbox` uses
+`scripts/sandbox/build-disk.sh` to work around that with a BIOS-only
+disk — good for `boot-check`, never for a real install.
+
+`just boot-check` is the non-interactive verdict for any built disk:
+exit 0 if the VM reaches `multi-user.target`, serial console in
+`serial.log`.
+
+### CI
+
+The workflows in `.github/workflows/` are manual-only
+(`workflow_dispatch`): this repo is private on GitHub's free tier, where
+Actions minutes are capped, and one image build would burn a large
+chunk of them. Everything they do is available locally through the
+justfile. Making the repo public would give unlimited Actions minutes
+if automatic builds are ever wanted.
 
 ## Installing / switching to Rosaline OS
 
@@ -93,20 +118,18 @@ and install fresh.
 
 ## CI/CD
 
-- `.github/workflows/build.yml` builds the Containerfile on every push to
-  `main`, weekly on a schedule (to pick up upstream Fedora/Bazzite
-  security updates), and on pull requests (build-only, no push). Successful
-  builds on `main` are pushed to `ghcr.io/gangstapichu/rosaline-os` and
-  signed with `cosign` (keyless/Sigstore).
+All manual-only (see "CI" above for why):
+
+- `.github/workflows/build.yml` builds the Containerfile, pushes the
+  result to `ghcr.io/gangstapichu/rosaline-os`, and signs it with
+  `cosign` (keyless/Sigstore).
 - `.github/workflows/build-iso.yml` builds an installable ISO from the
   published image using `bootc-image-builder` and uploads it as a workflow
   artifact.
-- `.github/workflows/boot-test.yml` runs after every successful image
-  build: builds a throwaway qcow2 test disk (`vm.toml`) and boots it
-  headless in QEMU, failing the job if the image doesn't reach
-  `multi-user.target` within 8 minutes. Catches "it builds but doesn't
-  boot" regressions automatically. The serial console log is uploaded as
-  a workflow artifact either way, for debugging a failure.
+- `.github/workflows/boot-test.yml` builds a throwaway qcow2 test disk
+  (`vm.toml`) from the published image and runs `scripts/boot-check.sh`
+  on it — the same check as `just boot-check` — uploading the serial
+  console log as an artifact either way.
 
 ## Contributing
 

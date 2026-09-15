@@ -89,21 +89,47 @@ That run caught and fixed two real bugs that static review had missed:
    before failing to remove the (busy) mountpoint. Fixed by excluding
    that one path from the cleanup.
 
-Turning the image into a bootable qcow2 (`just build-vm-image` /
-`boot-test.yml`) has been partially verified: `bootc-image-builder`
-needed an explicit `--rootfs ext4` (now added to both `justfile` and
-`boot-test.yml`) because the base image doesn't declare a default root
-filesystem, and beyond that the manifest generation and the start of
-disk materialization both ran successfully. The full disk write and
-the actual QEMU boot have *not* been verified — the sandbox this was
-developed in has a fixed ~30GB disk allowance, and the process ran out
-of space partway through writing the ostree checkout into the disk
-image (a real resource limit of that environment, not a permissions or
-tooling problem — privileged containers, loop devices, and KVM-less
-QEMU all work fine there, there just isn't room for a ~15GB base image
-plus a comparably-sized disk image at the same time). This step still
-needs a real run on hardware with more free disk (a normal dev machine
-or CI runner) before it's considered verified.
+A third bug came out of the follow-up: `bootc container lint` flagged a
+non-empty `/boot`, because `plymouth-set-default-theme -R` regenerates
+the initramfs into `/boot`, which bootc ignores — the theme would never
+have appeared at boot. `build.sh` now runs `dracut` against
+`/usr/lib/modules/<kver>/initramfs.img` and clears `/boot`; the
+resulting initramfs was inspected with `lsinitrd` and contains the
+theme, `script.so`, and a `plymouthd.conf` pointing at it.
+
+**The smoke flavor has booted, end to end.** `just smoke` builds the
+same `build_files/` + `system_files/` on `quay.io/fedora/fedora-bootc:44`
+(2 GB instead of 13 GB), converts it to a qcow2, and boots it headless.
+That was run for real in the development sandbox — under pure TCG
+software emulation, no KVM — and the serial console showed
+`Booting initrd of Rosaline OS`, `Welcome to Rosaline OS!`,
+`plymouth-start.service` starting, and the `ROSALINE-OS-BOOT-OK`
+marker from `rosaline-boot-marker.service` about 90 guest-seconds in.
+So the package list resolves on Fedora 44, the build scripts work on a
+base that isn't Bazzite, the initramfs/Plymouth wiring is right, the
+dconf and marker units behave, and `bootc-image-builder` needs
+`--rootfs ext4` (the base declares no default; now passed everywhere).
+
+Two things that flavor cannot show: what the Plymouth theme *looks*
+like (serial console only), and anything in Bazzite's own stack
+(Nvidia driver, gamescope, KDE) — which Rosaline doesn't modify.
+
+The sandbox needed workarounds that are now checked in as
+`scripts/sandbox/build-disk.sh` (`just smoke-sandbox`): its kernel has
+no partition-table parsers (loop devices never get `pN` nodes; fixed by
+shimming osbuild's loopback device to call `partx -a`) and no vfat (the
+EFI partition can't be mounted; worked around by building a BIOS-only
+disk with the EFI bootloader component removed and partition 2 not
+typed as an ESP). Those are properties of that environment, not of the
+image; on a normal machine `just smoke` / `just build-vm-image` don't
+need them.
+
+**Still unverified:** converting the full Bazzite-based image to a disk
+and booting it. Its container build is verified (above), but the
+sandbox's fixed ~30 GB disk allowance can't hold a 13 GB base plus a
+comparably sized disk image at once — it ran out of space partway
+through the ostree checkout. That step needs a machine with more free
+disk; the same `just build-vm-image && just boot-check` applies there.
 
 ## Open questions / next steps
 
@@ -112,10 +138,11 @@ or CI runner) before it's considered verified.
   script in `assets/branding/`). It doesn't implement a LUKS password
   prompt — see `assets/branding/README.md` and the comment at the top of
   `rosaline-os.script`.
-- **Local/CI VM testing**: see "Build verification status" above —
-  image build is verified, qcow2 conversion is verified up to the disk
-  write, actual QEMU boot is still unverified. `boot-test.yml`'s first
-  real CI run is the next real test of this tooling.
+- **VM testing**: see "Build verification status" above — the smoke
+  flavor is verified end to end; the Bazzite-based image is verified
+  through the container build and needs a machine with more disk for
+  `just build-vm-image && just boot-check`. CI is manual-only (private
+  repo on the free tier); the justfile is the primary path.
 - **Package list**: `build_files/build.sh` currently adds Cinnamon plus a
   couple of Mint-style utilities (Nemo, Timeshift, GNOME Disks). Further
   Nobara-specific packages not already covered by the Bazzite base
