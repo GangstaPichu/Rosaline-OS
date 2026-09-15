@@ -11,6 +11,8 @@ on:
 env:
   IMAGE_NAME: rosaline-os
   IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  BASE_IMAGE: ghcr.io/ublue-os/bazzite-nvidia
+  BASE_TAG: stable
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,13 +25,12 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Free up disk space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           tool-cache: true
           android: true
@@ -38,19 +39,38 @@ jobs:
           large-packages: false
           swap-storage: false
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
+
+      - name: Verify base image signature
+        # Fails the build if ghcr.io/ublue-os/bazzite-nvidia isn't signed
+        # by the key ublue-os/bazzite actually publishes and signs with
+        # (vendored at security/ublue-bazzite-cosign.pub -- see
+        # security/README.md for how that key was confirmed genuine).
+        # Without this, a compromised or substituted base image would
+        # get built into Rosaline OS with no warning.
+        run: |
+          cosign verify --key security/ublue-bazzite-cosign.pub \
+            --new-bundle-format=false \
+            "${BASE_IMAGE}:${BASE_TAG}"
+
       - name: Build image
         id: build
-        uses: redhat-actions/buildah-build@v2
+        uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2.13
         with:
           image: ${{ env.IMAGE_NAME }}
           tags: latest ${{ github.sha }}
           containerfiles: |
             ./Containerfile
+          build-args: |
+            BASE_IMAGE=${{ env.BASE_IMAGE }}
+            BASE_TAG=${{ env.BASE_TAG }}
           oci: true
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
-        uses: redhat-actions/podman-login@v1
+        uses: redhat-actions/podman-login@4934294ad0449894bcd1e9f191899d7292469603 # v1.7
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -58,21 +78,21 @@ jobs:
 
       - name: Push image
         id: push
-        if: github.event_name != 'pull_request'
-        uses: redhat-actions/push-to-registry@v2
+        uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2.8
         with:
           image: ${{ steps.build.outputs.image }}
           tags: ${{ steps.build.outputs.tags }}
           registry: ${{ env.IMAGE_REGISTRY }}
 
-      - name: Install cosign
-        if: github.event_name != 'pull_request'
-        uses: sigstore/cosign-installer@v3
-
       - name: Sign image
-        if: github.event_name != 'pull_request'
+        # Static-key signing (matching what our own shipped
+        # /etc/containers/policy.json verifies against on every future
+        # `bootc upgrade`) rather than keyless/Sigstore -- see
+        # security/README.md for why, and for key-rotation steps.
         env:
-          COSIGN_EXPERIMENTAL: "true"
+          SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+          COSIGN_PASSWORD: ${{ secrets.SIGNING_SECRET_PASSWORD }}
         run: |
-          cosign sign -y --keyless \
+          cosign sign -y --key env://SIGNING_SECRET \
+            --new-bundle-format=false --use-signing-config=false \
             "${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.push.outputs.digest }}"

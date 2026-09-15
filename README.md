@@ -35,6 +35,8 @@ build_files/build.sh     # Packages/config installed into the image
 build_files/cleanup.sh   # Post-install cleanup
 system_files/            # Static files copied verbatim to /
 assets/branding/         # Editable logo/wallpaper/boot-theme sources + render.py
+cosign.pub                # Rosaline OS's public signing key
+security/                 # Vendored trust anchors + signing docs (see Security below)
 iso.toml                 # bootc-image-builder config for the real installer ISO
 vm.toml                   # bootc-image-builder config for throwaway *test* VM disks
 justfile                 # Local build/lint/boot commands (podman + just [+ qemu])
@@ -120,9 +122,11 @@ and install fresh.
 
 All manual-only (see "CI" above for why):
 
-- `.github/workflows/build.yml` builds the Containerfile, pushes the
-  result to `ghcr.io/gangstapichu/rosaline-os`, and signs it with
-  `cosign` (keyless/Sigstore).
+- `.github/workflows/build.yml` verifies the Bazzite base image's
+  signature, builds the Containerfile, pushes the result to
+  `ghcr.io/gangstapichu/rosaline-os`, and signs it with `cosign` using a
+  static key (see "Security" below). Needs the `SIGNING_SECRET` and
+  `SIGNING_SECRET_PASSWORD` repository secrets to be set.
 - `.github/workflows/build-iso.yml` builds an installable ISO from the
   published image using `bootc-image-builder` and uploads it as a workflow
   artifact.
@@ -130,6 +134,55 @@ All manual-only (see "CI" above for why):
   (`vm.toml`) from the published image and runs `scripts/boot-check.sh`
   on it — the same check as `just boot-check` — uploading the serial
   console log as an artifact either way.
+
+All third-party Actions used in these workflows are pinned to a commit
+SHA (not a mutable version tag), fetched fresh from each action's repo
+rather than trusted from memory — see the `# vX.Y.Z` comment on each
+`uses:` line for what it resolves to.
+
+## Security
+
+- **Image signing**: every image pushed to `ghcr.io/gangstapichu/rosaline-os`
+  is signed with `cosign` using a static keypair (`cosign.pub` at the repo
+  root; the private half lives only in GitHub Actions secrets). This is
+  the same mechanism `ublue-os/bazzite` itself uses for its published
+  images — verified directly against a real `bazzite-nvidia` image before
+  relying on it, see `security/README.md`.
+- **Base image verification**: `build.yml` runs `cosign verify` against
+  `ghcr.io/ublue-os/bazzite-nvidia` (using their real, vendored public
+  key) *before* building — a compromised or substituted base image fails
+  the build instead of silently becoming part of Rosaline OS.
+- **Client-side enforcement**: the image ships its own
+  `/etc/containers/policy.json` + `/etc/containers/registries.d/`, so
+  once you're running Rosaline OS, `bootc upgrade` / `podman pull`
+  cryptographically verify every future update against
+  `system_files/usr/share/rosaline-os/cosign.pub` — pulling a tampered
+  or unsigned image fails outright. This is stricter than upstream:
+  Bazzite signs its images but doesn't actually ship a policy that
+  enforces verification on the client. The policy/registries.d
+  mechanism was tested end-to-end against a local registry (correct
+  signature accepted, wrong key and unsigned image both cryptographically
+  rejected) before being shipped — see `security/README.md`.
+- **Known limitation**: cosign signatures only assert repository
+  identity, not the specific tag (a `containers/image` limitation, not
+  something specific to this setup) — see `security/README.md`.
+- **Verify by hand**:
+  `cosign verify --key cosign.pub --new-bundle-format=false ghcr.io/gangstapichu/rosaline-os:latest`
+
+Setting up the two required secrets (only needed once, by whoever
+maintains signing):
+
+```sh
+gh secret set SIGNING_SECRET --repo gangstapichu/rosaline-os < /path/to/cosign.key
+gh secret set SIGNING_SECRET_PASSWORD --repo gangstapichu/rosaline-os
+```
+
+(or paste them into **Settings → Secrets and variables → Actions** in
+the GitHub web UI). The keypair matching the committed `cosign.pub` was
+generated in this session and sent to you directly (never committed to
+the repo) — see the chat for the private key file and password. If
+they're ever lost, rotate to a new keypair per `security/README.md`
+instead of trying to recover them.
 
 ## Contributing
 

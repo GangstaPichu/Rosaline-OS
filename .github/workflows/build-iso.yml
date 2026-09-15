@@ -19,10 +19,10 @@ jobs:
       packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Free up disk space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           tool-cache: true
           android: true
@@ -34,7 +34,7 @@ jobs:
       - name: Build ISO with bootc-image-builder
         run: |
           mkdir -p output
-          sudo podman run --rm -it --privileged \
+          sudo podman run --rm --privileged \
             --pull=newer \
             --security-opt label=type:unconfined_t \
             -v "$PWD/output:/output" \
@@ -46,7 +46,7 @@ jobs:
             "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
 
       - name: Upload ISO artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rosaline-os-iso
           path: output/bootiso/*.iso

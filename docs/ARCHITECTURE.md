@@ -151,7 +151,69 @@ disk; the same `just build-vm-image && just boot-check` applies there.
 - **Handheld variant**: Bazzite also publishes handheld-focused images;
   a second Containerfile/base-image pairing could produce a
   Deck-like Rosaline OS variant later if wanted.
-- **Signing key**: CI currently signs with keyless cosign (Sigstore/OIDC).
-  If a dedicated cosign keypair is preferred instead, add
-  `cosign.pub`/`cosign.key` (via a repo secret) and update
-  `build.yml` accordingly.
+- **Security**: see "Security architecture" below — image signing, base
+  verification, and client-side enforcement are done; pending is
+  actually rotating in a production keypair if the one generated during
+  development should be replaced, and deciding whether to also pin
+  `bootc-image-builder`/`fedora-bootc`/`registry:2` OCI *images* by
+  digest in the workflows and justfile (currently pulled by mutable tag
+  — lower risk than the GitHub Actions themselves since they're not
+  handed secrets or write access, but not nothing).
+
+## Security architecture
+
+Everything below was checked by actually running it against real
+artifacts in the development sandbox, not just written to spec —
+`security/README.md` has the how.
+
+**Signing.** Images are signed with a static cosign keypair (the
+`ghcr.io/ublue-os/bazzite-nvidia` image we build from is a real,
+working example of this exact approach: its own signature was decoded
+down to the raw Rekor transparency-log entry and confirmed to be a
+plain-key signature using precisely the key published at
+`ublue-os/bazzite`'s `cosign.pub`, which is also vendored here as
+`security/ublue-bazzite-cosign.pub`). `build.yml` verifies the base
+image against that key before building (`cosign verify --key
+security/ublue-bazzite-cosign.pub --new-bundle-format=false`), and
+signs the finished image with Rosaline OS's own key afterward
+(`secrets.SIGNING_SECRET`).
+
+**Client-side enforcement.** `system_files/etc/containers/policy.json`
+and `system_files/etc/containers/registries.d/rosaline-os.yaml` scope a
+`sigstoreSigned` requirement to `ghcr.io/gangstapichu/rosaline-os`
+specifically, leaving the rest of the system's default policy
+(`insecureAcceptAnything`, matching stock Fedora) untouched — so
+Flatpak/Distrobox/other registries keep working exactly as before, but
+`bootc upgrade` on a running Rosaline OS system now actually verifies
+signatures, which Bazzite itself doesn't enforce even though it signs.
+This was validated against a throwaway local registry with the same
+`policy.json`/`registries.d` mechanics (different scope name only):
+`skopeo copy` succeeded for a correctly-signed image, and failed with
+`cryptographic signature verification failed` for a wrong key and
+`A signature was required, but no signature exists` for a genuinely
+unsigned image at a different digest. (An earlier attempt using
+`skopeo inspect` for this test was a false positive in both directions
+— `inspect` doesn't consult `policy.json` at all; `copy`, which is what
+`podman pull`/`bootc` actually use, does.)
+
+Per `man containers-policy.json`: cosign-created signatures only
+contain repository identity, so `signedIdentity` must be
+`matchRepository` — the stricter default
+(`matchRepoDigestOrExact`) rejects every cosign signature outright.
+This means verification confirms an image came from our repository and
+was signed with our key, not that you got the exact tag you asked for
+over a substitution of another signed tag from the same repository —
+an inherent limit of cosign's identity model, not something this setup
+could tighten further.
+
+**Supply chain.** Every third-party GitHub Action in `.github/workflows/`
+is pinned to a commit SHA rather than a mutable tag (`v4`, `@main`,
+etc. can be repointed by the action's maintainer, or its account, to
+different code without any change on our end). SHAs were fetched fresh
+via `git ls-remote --tags` against each action's real repository for
+this work, matching the *currently-used major version* rather than
+jumping to a newer major that hasn't been exercised here (e.g. pinned
+`actions/checkout` to the latest `v4.x`, not `v7`). One of these,
+`sigstore/cosign-installer`, could be cross-checked against a real,
+independent pin: `ublue-os/bazzite`'s own `build.yml` pins the exact
+same commit for the same tag (`6f9f177…` for `v4.1.2`).

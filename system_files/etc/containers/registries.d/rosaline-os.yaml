@@ -1,0 +1,8 @@
+# Tells podman/skopeo/bootc to look for cosign-style signatures as OCI
+# attachments (the `<digest>.sig` tag convention) when pulling from our
+# registry, instead of assuming the legacy lookaside-URL scheme. Required
+# for the sigstoreSigned rule in /etc/containers/policy.json to actually
+# find our signatures. See `man containers-registries.d`.
+docker:
+  ghcr.io/gangstapichu/rosaline-os:
+    use-sigstore-attachments: true
