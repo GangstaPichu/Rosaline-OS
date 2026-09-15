@@ -16,6 +16,9 @@ build tag=default_tag:
 
 # Turn a locally built image into a bootable qcow2 test disk (throwaway
 # rosaline/rosaline dev account baked in via vm.toml -- see that file).
+# --rootfs ext4 is required: the Bazzite base doesn't declare a default
+# root filesystem, and bootc-image-builder fails with "missing required
+# info: DefaultRootFs" without it (confirmed by actually running this).
 build-vm-image tag=default_tag: (build tag)
     mkdir -p output
     sudo podman run --rm --privileged --pull=newer \
@@ -25,6 +28,7 @@ build-vm-image tag=default_tag: (build tag)
         -v /var/lib/containers/storage:/var/lib/containers/storage \
         quay.io/centos-bootc/bootc-image-builder:latest \
         --type qcow2 \
+        --rootfs ext4 \
         --config /config.toml \
         localhost/{{image_name}}:{{tag}}
 

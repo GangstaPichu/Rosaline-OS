@@ -17,10 +17,15 @@ way instead of starting from Arch or Debian.
 
 ## Status
 
-Early scaffold. The image builds and boots on top of Bazzite's Nvidia
-variant with a Cinnamon session layered in, and now has a first pass of
-branding (icon, wallpaper, boot splash — see `assets/branding/`). Package
-selection and further Mint-style polish are still being filled in.
+Early scaffold. The image itself has been verified to actually build
+(`podman build` + `bootc container lint` passing) on top of Bazzite's
+Nvidia variant with a Cinnamon session layered in, and has a first pass
+of branding (icon, wallpaper, boot splash — see `assets/branding/`).
+Converting it to a bootable disk is verified up through the disk write;
+an actual QEMU boot is not yet verified — see "Build verification
+status" in `docs/ARCHITECTURE.md` for exactly what has and hasn't been
+run. Package selection and further Mint-style polish are still being
+filled in.
 
 ## Repository layout
 

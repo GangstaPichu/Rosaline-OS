@@ -67,6 +67,44 @@ next `bootc upgrade` (or via the desktop update notifier that Bazzite
 already ships). This keeps the "atomic, reproducible, easy to roll back"
 property that both Bazzite and SteamOS rely on.
 
+## Build verification status
+
+The container image itself has actually been built end-to-end and
+verified — not just reviewed — including running `podman build` for
+real against `ghcr.io/ublue-os/bazzite-nvidia:stable` and confirming
+`bootc container lint` passes (10 checks passed, 3 cosmetic warnings
+about non-empty `/boot`/`/run`/`/var` content, which is normal/expected
+for an image that just ran a Plymouth initramfs rebuild and dnf5).
+That run caught and fixed two real bugs that static review had missed:
+
+1. `plymouth-set-default-theme -R rosaline-os` failed with
+   `script.so does not exist` — the Bazzite base doesn't install the
+   `plymouth-plugin-script` package our `ModuleName=script` theme
+   depends on. Fixed by installing it in `build_files/build.sh` before
+   setting the theme.
+2. `build_files/cleanup.sh` ran `rm -rf /tmp/*`, but `/tmp/build_files`
+   is a live bind mount of the *host* `build_files/` directory for the
+   duration of that `RUN` step (see the Containerfile). `rm -rf`
+   recursed into it and deleted `build.sh`/`cleanup.sh` themselves
+   before failing to remove the (busy) mountpoint. Fixed by excluding
+   that one path from the cleanup.
+
+Turning the image into a bootable qcow2 (`just build-vm-image` /
+`boot-test.yml`) has been partially verified: `bootc-image-builder`
+needed an explicit `--rootfs ext4` (now added to both `justfile` and
+`boot-test.yml`) because the base image doesn't declare a default root
+filesystem, and beyond that the manifest generation and the start of
+disk materialization both ran successfully. The full disk write and
+the actual QEMU boot have *not* been verified — the sandbox this was
+developed in has a fixed ~30GB disk allowance, and the process ran out
+of space partway through writing the ostree checkout into the disk
+image (a real resource limit of that environment, not a permissions or
+tooling problem — privileged containers, loop devices, and KVM-less
+QEMU all work fine there, there just isn't room for a ~15GB base image
+plus a comparably-sized disk image at the same time). This step still
+needs a real run on hardware with more free disk (a normal dev machine
+or CI runner) before it's considered verified.
+
 ## Open questions / next steps
 
 - **Branding**: done for a first pass — logo/icon, wallpaper, and a
@@ -74,15 +112,10 @@ property that both Bazzite and SteamOS rely on.
   script in `assets/branding/`). It doesn't implement a LUKS password
   prompt — see `assets/branding/README.md` and the comment at the top of
   `rosaline-os.script`.
-- **Local/CI VM testing**: `just build-vm-image` / `just boot` /
-  `just boot-headless` (see README) build a throwaway qcow2 via
-  `vm.toml` and boot it in QEMU; `.github/workflows/boot-test.yml` does
-  the headless version automatically after every image build, watching
-  for a marker (`rosaline-boot-marker.service`) instead of guessing at
-  console text. None of this has been run yet as of this writing — it
-  was authored in a sandbox with no podman, qemu, or `/dev/kvm` to test
-  against, so treat the first real run (local or CI) as the actual
-  first test of this tooling, not just of the image.
+- **Local/CI VM testing**: see "Build verification status" above —
+  image build is verified, qcow2 conversion is verified up to the disk
+  write, actual QEMU boot is still unverified. `boot-test.yml`'s first
+  real CI run is the next real test of this tooling.
 - **Package list**: `build_files/build.sh` currently adds Cinnamon plus a
   couple of Mint-style utilities (Nemo, Timeshift, GNOME Disks). Further
   Nobara-specific packages not already covered by the Bazzite base
