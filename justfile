@@ -9,17 +9,33 @@ vm_ram := "8G"
 vm_cpus := "4"
 ssh_port := "2222"
 disk := "output/qcow2/disk.qcow2"
+# Small plain-Fedora bootc base for the smoke flavor (see `smoke`).
+smoke_base := "quay.io/fedora/fedora-bootc"
+smoke_tag := "44"
 
-# Build the image locally
+# Build the image locally. --network=host so the build can reach package
+# mirrors through a host-side proxy too (needed in some dev sandboxes,
+# harmless elsewhere).
 build tag=default_tag:
-    podman build -t {{image_name}}:{{tag}} -f Containerfile .
+    podman build --network=host -t {{image_name}}:{{tag}} -f Containerfile .
 
-# Turn a locally built image into a bootable qcow2 test disk (throwaway
+# Same build_files/system_files on a plain fedora-bootc base instead of
+# Bazzite -- several times smaller, so it fits where the real image
+# doesn't. Exercises everything Rosaline itself adds (package list,
+# Plymouth theme + initramfs, dconf, boot marker, disk conversion, boot)
+# but not Bazzite's Nvidia/gamescope/KDE stack, which we don't touch.
+build-smoke:
+    podman build --network=host \
+        --build-arg BASE_IMAGE={{smoke_base}} --build-arg BASE_TAG={{smoke_tag}} \
+        -t {{image_name}}:smoke -f Containerfile .
+
+# Turn an already-built image into a bootable qcow2 test disk (throwaway
 # rosaline/rosaline dev account baked in via vm.toml -- see that file).
+# Run `build` or `build-smoke` first.
 # --rootfs ext4 is required: the Bazzite base doesn't declare a default
 # root filesystem, and bootc-image-builder fails with "missing required
 # info: DefaultRootFs" without it (confirmed by actually running this).
-build-vm-image tag=default_tag: (build tag)
+build-vm-image tag=default_tag:
     mkdir -p output
     sudo podman run --rm --privileged --pull=newer \
         --security-opt label=type:unconfined_t \
@@ -38,7 +54,7 @@ build-vm-image tag=default_tag: (build tag)
 boot:
     #!/usr/bin/env bash
     set -euo pipefail
-    kvm_flags=()
+    kvm_flags=(-cpu max)
     if [ -e /dev/kvm ]; then
         kvm_flags=(-enable-kvm -cpu host)
     else
@@ -55,7 +71,7 @@ boot:
 boot-headless:
     #!/usr/bin/env bash
     set -euo pipefail
-    kvm_flags=()
+    kvm_flags=(-cpu max)
     if [ -e /dev/kvm ]; then
         kvm_flags=(-enable-kvm -cpu host)
     else
@@ -66,6 +82,17 @@ boot-headless:
         -drive file={{disk}},if=virtio,format=qcow2 \
         -netdev user,id=n0,hostfwd=tcp::{{ssh_port}}-:22 -device virtio-net-pci,netdev=n0 \
         -display none -serial mon:stdio
+
+# Non-interactive "does it boot" check: boots the test disk headless and
+# waits for rosaline-boot-marker.service's marker on the serial console
+# (log in serial.log). Exit code is the verdict.
+boot-check timeout="900":
+    scripts/boot-check.sh {{disk}} {{timeout}}
+
+# The whole pipeline on the small base, end to end: build, convert to a
+# disk, boot it, verify. This is the run-it-yourself path for machines
+# (or sandboxes) without room for the full Bazzite-based image.
+smoke: build-smoke (build-vm-image "smoke") boot-check
 
 # SSH into a running test VM (the throwaway account from vm.toml)
 ssh:

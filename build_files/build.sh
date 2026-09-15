@@ -31,13 +31,24 @@ sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Rosaline OS\"/" /usr/lib/os-release
 grep -q '^LOGO=' /usr/lib/os-release || echo 'LOGO=rosaline-os' >> /usr/lib/os-release
 grep -q '^ANSI_COLOR=' /usr/lib/os-release || echo 'ANSI_COLOR="0;35"' >> /usr/lib/os-release
 
-# Boot splash: the "script" plugin our theme uses (ModuleName=script in
-# rosaline-os.plymouth) isn't installed by the Bazzite base -- without it
-# plymouth-set-default-theme fails with "script.so does not exist".
-# Install it, then set the theme as default and rebuild the initramfs
-# (-R) so it's actually picked up.
-dnf5 install -y plymouth-plugin-script
-plymouth-set-default-theme -R rosaline-os
+# Boot splash. The Bazzite base doesn't ship the "script" Plymouth plugin
+# our theme uses (ModuleName=script -> "script.so does not exist"), and
+# the plain fedora-bootc base used for the smoke flavor (`just smoke`)
+# doesn't ship plymouth/dconf/the icon-cache tool at all. Installing is
+# a no-op wherever they're already present.
+dnf5 install -y plymouth plymouth-plugin-script dconf gtk-update-icon-cache
+plymouth-set-default-theme rosaline-os
+
+# Regenerate the initramfs where bootc actually boots it from:
+# /usr/lib/modules/<kver>/initramfs.img. `plymouth-set-default-theme -R`
+# and a bare `dracut -f` write to /boot instead, which bootc ignores and
+# `bootc container lint` flags as nonempty-boot -- the theme would
+# silently never appear at boot.
+kver="$(basename "$(ls -d /usr/lib/modules/*/ | head -n1)")"
+dracut --no-hostonly --kver "$kver" --reproducible --add ostree \
+    -f "/usr/lib/modules/${kver}/initramfs.img"
+chmod 0600 "/usr/lib/modules/${kver}/initramfs.img"
+rm -rf /boot/*
 
 # Wallpaper: system_files/ already dropped the dconf keys and the PNG in
 # place; compile the dconf db so the default takes effect, and refresh

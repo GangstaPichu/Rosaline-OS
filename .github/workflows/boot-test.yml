@@ -1,15 +1,10 @@
 name: Boot-test Rosaline OS image
 
-# Smoke-tests that the published image actually boots, not just that it
-# built. Builds a throwaway qcow2 test disk (see vm.toml) from the image
-# and boots it headless in QEMU, watching the serial console for the
-# marker rosaline-boot-marker.service prints once multi-user.target is
-# reached.
+# Smoke-tests that a published image actually boots, not just that it
+# built: builds a throwaway qcow2 test disk (see vm.toml) and runs
+# scripts/boot-check.sh against it. Manual-only (see build.yml for why);
+# `just smoke` / `just boot-check` are the same thing run locally.
 on:
-  workflow_run:
-    workflows: ["Build Rosaline OS image"]
-    branches: [main]
-    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -20,14 +15,11 @@ on:
 env:
   IMAGE_NAME: rosaline-os
   IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
-  BOOT_TIMEOUT_SECONDS: 480
-  BOOT_MARKER: ROSALINE-OS-BOOT-OK
 
 jobs:
   boot-test:
     name: Boot in QEMU
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: read
@@ -50,16 +42,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 ovmf
 
-      - name: Enable KVM if available
+      - name: Make KVM usable if present
         run: |
-          if [ -e /dev/kvm ]; then
-            echo "kvm available"
-            sudo chmod 666 /dev/kvm
-            echo "KVM_FLAGS=-enable-kvm -cpu host" >> "$GITHUB_ENV"
-          else
-            echo "no /dev/kvm on this runner -- using slower software emulation"
-            echo "KVM_FLAGS=" >> "$GITHUB_ENV"
-          fi
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
 
       - name: Build qcow2 test disk
         run: |
@@ -77,37 +62,7 @@ jobs:
             "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
 
       - name: Boot and wait for marker
-        run: |
-          set -x
-          qemu-system-x86_64 $KVM_FLAGS \
-            -m 8G -smp 4 \
-            -drive file=output/qcow2/disk.qcow2,if=virtio,format=qcow2 \
-            -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
-            -display none -serial file:serial.log -no-reboot &
-          qemu_pid=$!
-
-          deadline=$(( $(date +%s) + BOOT_TIMEOUT_SECONDS ))
-          found=0
-          while [ "$(date +%s)" -lt "$deadline" ]; do
-            if [ -f serial.log ] && grep -q "$BOOT_MARKER" serial.log; then
-              found=1
-              break
-            fi
-            if ! kill -0 "$qemu_pid" 2>/dev/null; then
-              echo "QEMU exited early" >&2
-              break
-            fi
-            sleep 5
-          done
-
-          kill "$qemu_pid" 2>/dev/null || true
-          wait "$qemu_pid" 2>/dev/null || true
-
-          if [ "$found" -ne 1 ]; then
-            echo "Boot marker '$BOOT_MARKER' not seen within ${BOOT_TIMEOUT_SECONDS}s" >&2
-            exit 1
-          fi
-          echo "Boot marker seen -- image boots to multi-user.target."
+        run: scripts/boot-check.sh output/qcow2/disk.qcow2 900
 
       - name: Upload serial console log
         if: always()

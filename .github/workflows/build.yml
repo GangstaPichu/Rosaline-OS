@@ -1,19 +1,11 @@
 name: Build Rosaline OS image
 
+# Manual-only on purpose. This repo is private on GitHub's free tier,
+# where Actions minutes are capped and a 13GB-base image build would
+# burn through them; the same steps run locally via the justfile
+# (`just build`, `just smoke`). If the repo is ever made public, Actions
+# minutes become unlimited and push/schedule triggers can come back.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-  schedule:
-    # Rebuild weekly to pick up upstream Bazzite/Fedora security updates.
-    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 env:

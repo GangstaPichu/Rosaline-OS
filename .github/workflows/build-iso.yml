@@ -1,12 +1,9 @@
 name: Build Rosaline OS ISO
 
 # Builds an installable ISO from the already-published OCI image using
-# bootc-image-builder. Runs after a successful image build, or manually.
+# bootc-image-builder. Manual-only (see build.yml for why); run it after
+# a manual image build has pushed to GHCR.
 on:
-  workflow_run:
-    workflows: ["Build Rosaline OS image"]
-    branches: [main]
-    types: [completed]
   workflow_dispatch:
 
 env:
@@ -17,7 +14,6 @@ jobs:
   build-iso:
     name: Build ISO
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: read
