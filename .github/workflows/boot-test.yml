@@ -14,7 +14,6 @@ on:
 
 env:
   IMAGE_NAME: rosaline-os
-  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   boot-test:
@@ -26,6 +25,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Compute lowercase image registry
+        # See the same step in build.yml -- github.repository_owner
+        # isn't lowercase and GHCR/OCI references must be.
+        run: echo "IMAGE_REGISTRY=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Free up disk space
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
