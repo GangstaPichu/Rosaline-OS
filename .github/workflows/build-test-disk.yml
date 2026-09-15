@@ -68,6 +68,12 @@ jobs:
             --rootfs ext4 \
             --config /config.toml \
             "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
+          # bootc-image-builder writes as root (privileged container), so
+          # output/qcow2/ is root-owned -- the next step runs as the
+          # normal runner user and needs write access to create the .gz
+          # alongside it (found by actually running this: "gzip:
+          # disk.qcow2.gz: Permission denied").
+          sudo chown -R "$(id -u):$(id -g)" output
           ls -la output/qcow2/
 
       - name: Compress the disk image
