@@ -124,12 +124,48 @@ typed as an ESP). Those are properties of that environment, not of the
 image; on a normal machine `just smoke` / `just build-vm-image` don't
 need them.
 
-**Still unverified:** converting the full Bazzite-based image to a disk
-and booting it. Its container build is verified (above), but the
-sandbox's fixed ~30 GB disk allowance can't hold a 13 GB base plus a
-comparably sized disk image at once — it ran out of space partway
-through the ostree checkout. That step needs a machine with more free
-disk; the same `just build-vm-image && just boot-check` applies there.
+**The real Bazzite-based image has now booted graphically, on real
+hardware (a Windows 10 PC, no Hyper-V/WSL2 available, so pure QEMU TCG
+software emulation via `.github/workflows/build-test-disk.yml`'s
+downloadable-disk path).** This is the first time anyone has seen it
+render, not just checked exit codes. It's a real mix of good and
+not-yet-fixed:
+
+- Boots to a usable, interactive KDE Plasma desktop (Bazzite's default
+  session) — confirmed via a working Konsole terminal and the desktop
+  context menu. `dev sandbox` couldn't show this; a person watching a
+  screen could.
+- The Nvidia driver module loads cleanly (`nvidia: module license
+  'NVIDIA' taints kernel`, `nvidia-nvlink` initializing) and correctly,
+  gracefully reports no hardware (`NVRM: No NVIDIA GPU found`) rather
+  than crashing — expected and correct for a VM with no GPU passthrough,
+  and the right signal that the driver bundle itself is intact.
+  Actual GPU behavior can only be verified on real hardware; that's a
+  separate, later step (a real install), not something any VM test can
+  cover.
+- greenboot health checks and `ostree-finalize-staged` complete
+  successfully; `bazzite-hardware-setup.service` runs.
+- Our own wallpaper config is correctly baked in — confirmed directly
+  in a live shell: `gsettings get org.cinnamon.desktop.background
+  picture-uri` returns our file, and `ls` confirms it exists at that
+  path, right size. It doesn't render by default only because the
+  default/autologin session is Plasma, not Cinnamon, and Plasma
+  doesn't read that key (see "Known gaps" below).
+- Three real, newly-found issues, not yet fixed:
+  1. **Hostname is still `bazzite`** (visible at the tty login prompt:
+     `bazzite login:`) — `build.sh` never sets one.
+  2. **SDDM doesn't reliably come back after logging out** of a
+     session — it fell back to a bare text console (tty3) instead of
+     re-showing the graphical greeter. Not yet root-caused; a fresh
+     boot's *first* SDDM screen works fine, so this is specific to the
+     logout → re-greet transition.
+  3. **The logout confirmation dialog itself was flaky** — reported by
+     the person testing it as repeatedly auto-closing before it could
+     be clicked, taking three attempts to catch it open. Not
+     root-caused; a plausible but unconfirmed guess is Plasma's logout
+     screen (QML/compositor-animated) behaving oddly under pure
+     software rendering with no GPU acceleration, but that's a
+     hypothesis, not a diagnosis.
 
 ## Open questions / next steps
 
