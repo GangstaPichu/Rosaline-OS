@@ -15,28 +15,38 @@ dnf5_opts=(--setopt=max_parallel_downloads=10)
 # (a la Linux Mint) alongside Bazzite's existing KDE Plasma / gamescope
 # sessions -- SDDM lets users pick a session at login, nothing here removes
 # the gaming-focused defaults.
+#
+# `cinnamon` (not just cinnamon-desktop/cinnamon-session) is the actual
+# desktop-environment package -- window manager (Muffin), panel,
+# applets, and the /usr/share/xsessions/cinnamon.desktop session file
+# itself all live there. cinnamon-desktop is really a shared library
+# (like gnome-desktop), and cinnamon-session is just the session
+# management *utility* -- neither one is the DE. Found the hard way: a
+# real build with only those two installed successfully but had no
+# window manager and no session file at all, caught by the check right
+# below rather than a VM boot this time.
 dnf5 install -y "${dnf5_opts[@]}" \
-    cinnamon-desktop \
-    cinnamon-session \
+    cinnamon \
     cinnamon-control-center \
-    nemo \
     nemo-fileroller
 
 # Hard verification, not best-effort: Cinnamon is Rosaline's actual
 # differentiator from stock Bazzite, so a build where it can't even
 # start has failed at its one job even if everything else succeeds.
-# Cinnamon is X11-only (no Wayland session), so this checks for both
-# the exact session file state.conf's [Last] Session=cinnamon.desktop
-# actually references and a working Xorg server -- not just that the
-# cinnamon-session package installed *something*. Fail the build
-# loudly here rather than discovering it three hours into a VM boot
-# test, which is how this got found the first time.
+# Checks for the exact session file state.conf's [Last]
+# Session=cinnamon.desktop actually references, and a working Xorg
+# server for it to run on (Fedora 44's `cinnamon` package does also
+# ship a Wayland session, cinnamon-wayland.desktop, but state.conf
+# explicitly preselects the X11 one, so that's what has to exist).
+# Fail the build loudly here rather than discovering it three hours
+# into a VM boot test, which is how the missing-`cinnamon`-package bug
+# above got found in the first place.
 if [ ! -f /usr/share/xsessions/cinnamon.desktop ]; then
     echo "FATAL: /usr/share/xsessions/cinnamon.desktop is missing -- Cinnamon won't be selectable at the SDDM greeter at all." >&2
     exit 1
 fi
 if ! rpm -q xorg-x11-server-Xorg &>/dev/null; then
-    echo "FATAL: xorg-x11-server-Xorg isn't installed -- Cinnamon (X11-only, no Wayland session) can't actually start without it." >&2
+    echo "FATAL: xorg-x11-server-Xorg isn't installed -- the cinnamon.desktop (X11) session can't actually start without it." >&2
     exit 1
 fi
 
