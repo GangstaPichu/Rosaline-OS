@@ -113,32 +113,54 @@ the problem — e.g. it's been causing bluescreens with other
 software/games — WSL2 will hit the same issue), let CI do the only step
 that actually needs real Linux, and just boot the result locally:
 
-1. **Actions tab → "Build downloadable test disk" → Run workflow.**
-   This pulls the published image, converts it to a qcow2 with
-   `bootc-image-builder` (needs privileged containers and loop devices
-   — real Linux, which is why this runs in CI rather than on Windows),
-   gzips it, and uploads it as a workflow artifact
-   (`rosaline-os-test-disk`, ~7 day retention). It's a multi-GB
-   download either way; gzip cuts it down some but budget time.
-2. **Download and decompress** the artifact. 7-Zip opens `.gz` directly,
+1. **Actions tab → "Build Rosaline OS image" → Run workflow.** Rebuilds
+   and pushes the image, then — as its last step — dispatches "Build
+   downloadable test disk" itself, so one click starts both instead of
+   having to babysit the first and manually trigger the second (that
+   second step couldn't be a normal `on: workflow_run` trigger, since
+   those only ever look at the workflow file on the *default* branch,
+   never the branch actually running — this repo dispatches it
+   explicitly instead so it works from any branch). If you only need a
+   disk from what's already published and don't need a rebuild, you can
+   still run **"Build downloadable test disk"** on its own.
+2. **Wait for both to finish**, then download the `rosaline-os-test-disk`
+   artifact from the second workflow's run. It pulls the published
+   image, converts it to a qcow2 with `bootc-image-builder` (needs
+   privileged containers and loop devices — real Linux, which is why
+   this runs in CI rather than on Windows), compresses it with `pigz`
+   (parallel gzip — same `.gz` format, just faster to produce on a
+   multi-core runner), and uploads it as a workflow artifact (~7 day
+   retention). It's a multi-GB download either way; compression cuts it
+   down some but budget time.
+3. **Download and decompress** the artifact. 7-Zip opens `.gz` directly,
    or in PowerShell: `tar -xzf disk.qcow2.gz` (Windows 10 1803+ ships a
    `tar.exe` that handles gzip).
-3. **Install QEMU for Windows** — a *native* Windows build, no WSL:
+4. **Install QEMU for Windows** — a *native* Windows build, no WSL:
    `choco install qemu` (Chocolatey) or `scoop install qemu` (Scoop),
    or the installer from <https://qemu.weilnetz.de/w64/> (the build
    linked from qemu.org's own downloads page) if you don't use a
    package manager.
-4. **Boot it in pure software emulation** — no `-accel whpx`, no
+5. **Boot it in pure software emulation** — no `-accel whpx`, no
    `-enable-kvm`, nothing that touches VT-x/AMD-V or the hypervisor
    layer at all, so it can't trigger whatever makes Hyper-V unstable on
    that machine. Slower than hardware-accelerated (expect it to feel
    sluggish, especially at the boot splash), but fine for a one-time
    "does this actually boot and look right" check:
    ```powershell
-   qemu-system-x86_64.exe -accel tcg -m 8G -smp 4 `
-     -drive file=disk.qcow2,if=virtio,format=qcow2 `
+   qemu-system-x86_64.exe -accel tcg -m 8G -smp 8 `
+     -drive file=disk.qcow2,if=virtio,format=qcow2,cache=writeback `
      -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0
    ```
+   `-smp` and `cache=writeback` are worth tuning to your actual machine
+   — TCG's multi-threaded mode runs each virtual CPU on its own host
+   thread, so a `-smp` closer to your real core/thread count lets more
+   of the guest's own parallel boot work (systemd starting units
+   concurrently, desktop session startup) actually happen at once
+   instead of serializing; `cache=writeback` speeds up disk-heavy
+   moments like the initial boot and is safe here since this disk is
+   disposable. Neither is a magic multiplier — a lot of boot is
+   inherently single-threaded, and TCG's per-instruction translation
+   overhead doesn't go away — but both help.
    Log in with the throwaway `rosaline`/`rosaline` account (from
    `vm.toml` — never used on a real install).
 
