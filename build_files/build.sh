@@ -147,6 +147,10 @@ if rpm -q plasma-setup &>/dev/null; then
     echo "${katie_matches:-  (none)}"
     echo "plasma-setup reskin: wallpaper matches:"
     echo "${wallpaper_matches:-  (none)}"
+    if [ -z "$katie_matches" ] || [ -z "$wallpaper_matches" ]; then
+        echo "plasma-setup reskin: diagnostic -- all image files this package owns:"
+        grep -iE '\.(png|jpe?g|svg)$' <<<"$plasma_setup_files" || echo "  (none)"
+    fi
 
     while read -r f; do
         [ -f "$f" ] && cp -fv "$mascot_a" "$f"
@@ -170,11 +174,19 @@ fi
 # name (e.g. "01-breeze-fedora"), since that exact name wasn't
 # independently confirmed against Bazzite's actual installed package,
 # and there are normally only one or two themes present anyway.
+#
+# Globs on metadata.desktop, not theme.conf: a real build found zero
+# matches globbing on theme.conf specifically, and metadata.desktop is
+# the file SDDM actually requires to recognize a directory as a theme
+# at all (per SDDM's own theme-discovery mechanism) -- theme.conf
+# itself is optional, a theme can rely entirely on QML defaults
+# without shipping one, which is apparently what happened here.
+# theme.conf.user doesn't need a sibling theme.conf to work.
 login_bg=/usr/share/backgrounds/rosaline-os/rosaline-login.png
 shopt -s nullglob
 sddm_themes_found=0
-for theme_conf in /usr/share/sddm/themes/*/theme.conf; do
-    theme_dir="$(dirname "$theme_conf")"
+for metadata in /usr/share/sddm/themes/*/metadata.desktop; do
+    theme_dir="$(dirname "$metadata")"
     echo "SDDM reskin: writing ${theme_dir}/theme.conf.user"
     cat > "${theme_dir}/theme.conf.user" <<-EOF
 	[General]
@@ -185,6 +197,10 @@ for theme_conf in /usr/share/sddm/themes/*/theme.conf; do
 done
 shopt -u nullglob
 echo "SDDM reskin: ${sddm_themes_found} theme(s) overridden"
+if [ "$sddm_themes_found" -eq 0 ]; then
+    echo "SDDM reskin: diagnostic -- contents of /usr/share/sddm/themes/ (if it exists):"
+    ls -la /usr/share/sddm/themes/ 2>&1 || echo "  (directory doesn't exist)"
+fi
 
 # Boot-test marker: lets CI/local VM smoke tests (see boot-test.yml,
 # `just boot-headless`) detect a successful boot deterministically by
