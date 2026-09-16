@@ -6,8 +6,8 @@
 // DisplayPasswordFunction/DisplayQuestionFunction handlers, otherwise
 // Plymouth falls back to a plain text prompt for those.
 
-Window.SetBackgroundTopColor(0.086, 0.071, 0.102);    // #16121A
-Window.SetBackgroundBottomColor(0.106, 0.082, 0.118); // #1B1420
+Window.SetBackgroundTopColor(0.141, 0.125, 0.220);    // #242038
+Window.SetBackgroundBottomColor(0.212, 0.173, 0.275); // #362C46
 
 logo.image = Image("logo.png");
 logo.sprite = Sprite(logo.image);

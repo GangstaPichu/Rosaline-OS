@@ -1,52 +1,90 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3840 2160" width="3840" height="2160">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#100C13"/>
-      <stop offset="55%" stop-color="#1B1420"/>
-      <stop offset="100%" stop-color="#2A1526"/>
+    <!-- dusk sky instead of the old cool ink/plum: still dark enough to
+         keep desktop icons/text legible, but warmer, more "just after
+         sunset, about to head out" than "night-club" -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="35%" y2="100%">
+      <stop offset="0%" stop-color="#242038"/>
+      <stop offset="55%" stop-color="#362C46"/>
+      <stop offset="100%" stop-color="#4E3A47"/>
     </linearGradient>
 
     <radialGradient id="auraRose" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#E0355F" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="#E0355F" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#F0879B" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#F0879B" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="auraViolet" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#7C4DBB" stop-opacity="0.5"/>
-      <stop offset="100%" stop-color="#7C4DBB" stop-opacity="0"/>
+    <radialGradient id="auraLavender" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#B79FE3" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#B79FE3" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="auraGold" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#E0A83A" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="#E0A83A" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#F3C56E" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#F3C56E" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="auraTeal" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#2E9CA6" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="#2E9CA6" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#7FC4B8" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#7FC4B8" stop-opacity="0"/>
     </radialGradient>
 
-    <path id="petal" d="M 256,258
-      C 214,236 190,178 205,112
-      C 213,78 232,56 256,44
-      C 274,64 288,92 288,130
-      C 288,182 278,228 256,258 Z"/>
+    <path id="petalLight" d="M 256,256
+      C 226,222 214,160 222,108
+      C 226,78 238,52 256,34
+      L 256,256 Z"/>
+    <path id="petalDark" d="M 256,34
+      C 274,52 286,78 290,108
+      C 298,160 286,222 256,256
+      L 256,34 Z"/>
+
+    <path id="star" d="M 0,-9 L 2,-2 9,0 2,2 0,9 -2,2 -9,0 -2,-2 Z"/>
   </defs>
 
   <rect width="3840" height="2160" fill="url(#bg)"/>
 
   <!-- soft colour aura cluster, bottom-right -->
   <circle cx="2980" cy="1530" r="620" fill="url(#auraRose)"/>
-  <circle cx="3220" cy="1350" r="560" fill="url(#auraViolet)"/>
+  <circle cx="3220" cy="1350" r="560" fill="url(#auraLavender)"/>
   <circle cx="3060" cy="1750" r="560" fill="url(#auraGold)"/>
   <circle cx="2760" cy="1370" r="520" fill="url(#auraTeal)"/>
 
   <!-- faint echo aura, top-left, for balance -->
-  <circle cx="520" cy="360" r="420" fill="url(#auraTeal)" opacity="0.6"/>
-  <circle cx="360" cy="560" r="380" fill="url(#auraViolet)" opacity="0.5"/>
+  <circle cx="520" cy="360" r="420" fill="url(#auraTeal)" opacity="0.55"/>
+  <circle cx="360" cy="560" r="380" fill="url(#auraLavender)" opacity="0.45"/>
 
-  <!-- watermark-scale bloom mark sitting inside the main aura -->
+  <!-- a thin travelled-path line curving through the scene, the
+       "adventure" half of cozy-adventure: implies a journey without
+       drawing a literal map -->
+  <path d="M -100,1900 C 800,1750 1400,1980 2100,1700 S 3300,1250 4000,1300"
+        fill="none" stroke="#F5EDE9" stroke-opacity="0.14" stroke-width="5"
+        stroke-dasharray="4 34" stroke-linecap="round"/>
+
+  <!-- a scatter of small stars for the cozy dusk-sky half -->
+  <g fill="#F5EDE9">
+    <use href="#star" transform="translate(420,220) scale(1.6)" opacity="0.5"/>
+    <use href="#star" transform="translate(900,420) scale(1.1)" opacity="0.35"/>
+    <use href="#star" transform="translate(1500,180) scale(1.3)" opacity="0.4"/>
+    <use href="#star" transform="translate(2150,340) scale(0.9)" opacity="0.3"/>
+    <use href="#star" transform="translate(700,750) scale(0.8)" opacity="0.25"/>
+    <use href="#star" transform="translate(1850,620) scale(1.2)" opacity="0.35"/>
+    <use href="#star" transform="translate(250,900) scale(1.0)" opacity="0.3"/>
+  </g>
+
+  <!-- watermark-scale compass-rose mark sitting inside the main aura -->
   <g opacity="0.4" transform="translate(2450,1000) scale(2.6) rotate(-10)">
-    <use href="#petal" fill="#E0355F" transform="rotate(0 256 256)"/>
-    <use href="#petal" fill="#7C4DBB" transform="rotate(82 256 256)"/>
-    <use href="#petal" fill="#E0A83A" transform="rotate(172 256 256)"/>
-    <use href="#petal" fill="#2E9CA6" transform="rotate(262 256 256)"/>
+    <g transform="rotate(0 256 256)">
+      <use href="#petalLight" fill="#F6AEBB"/>
+      <use href="#petalDark" fill="#E06B82"/>
+    </g>
+    <g transform="rotate(90 256 256)">
+      <use href="#petalLight" fill="#F8DDA0"/>
+      <use href="#petalDark" fill="#E5AC49"/>
+    </g>
+    <g transform="rotate(180 256 256)">
+      <use href="#petalLight" fill="#D2C2F2"/>
+      <use href="#petalDark" fill="#9B7FD1"/>
+    </g>
+    <g transform="rotate(270 256 256)">
+      <use href="#petalLight" fill="#ABDED2"/>
+      <use href="#petalDark" fill="#5CA99B"/>
+    </g>
   </g>
 </svg>

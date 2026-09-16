@@ -22,7 +22,7 @@ WALLPAPER_SVG = HERE / "wallpaper.svg"
 
 ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512]
 
-PETAL_COLORS = ["#E0355F", "#7C4DBB", "#E0A83A", "#2E9CA6"]
+PETAL_COLORS = ["#F0879B", "#F3C56E", "#B79FE3", "#7FC4B8"]
 
 
 def render_icons():
@@ -72,8 +72,8 @@ def render_wallpaper():
     <filename>/usr/share/backgrounds/rosaline-os/rosaline-default.png</filename>
     <options>zoom</options>
     <shade_type>solid</shade_type>
-    <pcolor>#16121A</pcolor>
-    <scolor>#16121A</scolor>
+    <pcolor>#242038</pcolor>
+    <scolor>#242038</scolor>
   </wallpaper>
 </wallpapers>
 """
