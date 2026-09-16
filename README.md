@@ -122,22 +122,20 @@ that actually needs real Linux, and just boot the result locally:
    never the branch actually running — this repo dispatches it
    explicitly instead so it works from any branch). If you only need a
    disk from what's already published and don't need a rebuild, you can
-   still run **"Build downloadable test disk"** on its own — it takes a
-   `format` input (`vmdk` or `qcow2`, see below), defaulting to `vmdk`.
-2. **Wait for both to finish**, then download the
-   `rosaline-os-test-disk-vmdk` (or `-qcow2`) artifact from the second
-   workflow's run. It pulls the published image and converts it
-   directly with `bootc-image-builder` (needs privileged containers and
-   loop devices — real Linux, which is why this runs in CI rather than
-   on Windows) into whichever format you asked for, then uploads it
+   still run **"Build downloadable test disk"** on its own.
+2. **Wait for both to finish**, then download the `rosaline-os-test-disk`
+   artifact from the second workflow's run. It pulls the published
+   image and converts it to a qcow2 with `bootc-image-builder` (needs
+   privileged containers and loop devices — real Linux, which is why
+   this runs in CI rather than on Windows), then uploads it
    uncompressed. It's a multi-GB download either way; measured on a
    real run, gzip only shaved 1.2% off this specific file (it's already
    too dense — RPM payloads, binaries — to compress well), so there's no
    real size upside to compressing it, only slower CI and an extra
    decompression step for you.
 3. **Download the artifact.** It arrives as a `.zip` (GitHub wraps every
-   artifact that way) — extract it and you've got the raw `.vmdk` or
-   `.qcow2` directly, no further decompression needed.
+   artifact that way) — extract it and you've got the raw `.qcow2`
+   directly, no further decompression needed.
 
 From here, pick one:
 
@@ -151,18 +149,28 @@ back to a slow emulated mode), VirtualBox and VMware Workstation Pro
 (free for personal use) both drive VT-x directly instead of emulating
 it, which is the difference between "sluggish" and "normal speed."
 
-Use the `vmdk` format from step 2 above — no conversion needed, it's a
-disk format both tools already understand. Create a new VM pointed at
-that `disk.vmdk`, give it EFI/UEFI firmware (both bootc's qcow2 and
-vmdk outputs are GPT+ESP, not legacy BIOS), 8GB+ RAM, and as many
-cores as you're comfortable giving it. Log in with the throwaway
-`rosaline`/`rosaline` account (from `vm.toml` — never used on a real
-install).
+Convert the downloaded qcow2 to vmdk first — **don't** use
+`bootc-image-builder --type vmdk` directly even though it exists: its
+output defaults to the `streamOptimized` subformat, which is a
+compressed, sequential-write-only format meant for OVA/OVF
+distribution, not for a live VM to boot and write to. Confirmed the
+hard way — it produces repeatable disk I/O errors and filesystem
+corruption at fixed sectors under both VirtualBox and VMware, and
+there's no exposed config option to pick a different subformat.
+`qemu-img` doesn't have that problem (its default vmdk subformat,
+`monolithicSparse`, is a normal writable one):
+```powershell
+qemu-img convert -O vmdk disk.qcow2 disk.vmdk
+```
+(needs a QEMU install for `qemu-img.exe` — see the Plain QEMU section
+below if you don't have one yet). Then create a new VM pointed at that
+`disk.vmdk`, give it EFI/UEFI firmware (bootc's qcow2/vmdk output is
+GPT+ESP, not legacy BIOS), 8GB+ RAM, and as many cores as you're
+comfortable giving it. Log in with the throwaway `rosaline`/`rosaline`
+account (from `vm.toml` — never used on a real install).
 
-If you already have an old `.qcow2` around and don't want to
-re-download, `qemu-img convert -O vmdk disk.qcow2 disk.vmdk` (from a
-QEMU install) does the same conversion locally — just remember it's a
-one-time snapshot, not a link, so re-run it after every new qcow2.
+Remember this conversion is a one-time snapshot, not a link — re-run it
+after every fresh qcow2 download rather than reusing an old `disk.vmdk`.
 
 #### Plain QEMU (no extra software, but slower)
 

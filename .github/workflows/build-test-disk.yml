@@ -1,20 +1,25 @@
 name: Build downloadable test disk
 
-# Produces a bootable disk from the published image and uploads it as a
-# workflow artifact, for testing on a machine where none of
+# Produces a bootable qcow2 disk from the published image and uploads
+# it as a workflow artifact, for testing on a machine where none of
 # podman/bootc-image-builder/WSL2/KVM are available or wanted -- notably
 # Windows without Hyper-V enabled. See README.md's "Testing on Windows
-# without Hyper-V" section for what to do with the download.
+# without Hyper-V" section for what to do with the download, including
+# converting to vmdk for VirtualBox/VMware.
 #
-# `format` picks bootc-image-builder's own output type directly (it
-# supports vmdk natively -- no local `qemu-img convert` needed) so the
-# artifact drops straight into VirtualBox/VMware, or qcow2 for plain
-# QEMU. Defaults to vmdk.
-#
-# This does the same conversion as boot-test.yml but keeps producing a
-# downloadable artifact as a separate concern from CI's own headless
-# boot-check (which always uses qcow2), and skips the boot-check here
-# so a slow artifact upload isn't blocked behind it.
+# Deliberately NOT offering --type vmdk here even though bootc-image-
+# builder supports it directly: confirmed against a real VMware boot
+# (repeatable I/O errors at fixed sectors, "Medium Error"/"Write
+# error", filesystem corruption) that its vmdk output defaults to the
+# "streamOptimized" subformat -- a compressed, sequential-write-only
+# format meant for OVA/OVF distribution, not for a live VM to boot and
+# write to. Confirmed via the run's own manifest log:
+# `org.osbuild.qemu`'s `"format": {"type": "vmdk", "subformat":
+# "streamOptimized"}`. bootc-image-builder's CLI/TOML config doesn't
+# expose a way to pick a different vmdk_subformat (that's an internal
+# osbuild manifest option), so qcow2 + a local `qemu-img convert`
+# (which defaults to the normal writable monolithicSparse subformat)
+# is the only reliable path to a bootable vmdk right now.
 on:
   workflow_dispatch:
     inputs:
@@ -22,13 +27,6 @@ on:
         description: "Image tag to convert"
         default: "latest"
         required: false
-      format:
-        description: "Disk format (vmdk for VirtualBox/VMware, qcow2 for plain QEMU)"
-        type: choice
-        options:
-          - vmdk
-          - qcow2
-        default: vmdk
 
 env:
   IMAGE_NAME: rosaline-os
@@ -63,8 +61,6 @@ jobs:
         run: |
           mkdir -p output
           TAG="${{ github.event.inputs.tag || 'latest' }}"
-          FORMAT="${{ github.event.inputs.format || 'vmdk' }}"
-          echo "FORMAT=${FORMAT}" >> "$GITHUB_ENV"
           # bootc-image-builder no longer pulls its target image itself
           # (found by actually running this workflow) -- it must already
           # be in local podman storage first.
@@ -75,18 +71,18 @@ jobs:
             -v "$PWD/vm.toml:/config.toml:ro" \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             quay.io/centos-bootc/bootc-image-builder:latest \
-            --type "${FORMAT}" \
+            --type qcow2 \
             --rootfs ext4 \
             --config /config.toml \
             "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
           # bootc-image-builder writes as root (privileged container), so
-          # output/<format>/ is root-owned -- the next step runs as the
+          # output/qcow2/ is root-owned -- the next step runs as the
           # normal runner user and needs read access to upload it (found
           # by actually running an earlier version of this that also
           # tried to write there: "gzip: disk.qcow2.gz: Permission
           # denied").
           sudo chown -R "$(id -u):$(id -g)" output
-          ls -la "output/${FORMAT}/"
+          ls -la output/qcow2/
 
       - name: Upload disk image
         # No manual compression step here anymore -- measured on a real
@@ -103,7 +99,7 @@ jobs:
         # build-iso.yml already uses for its *.iso).
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: rosaline-os-test-disk-${{ env.FORMAT }}
-          path: output/${{ env.FORMAT }}/*
+          name: rosaline-os-test-disk
+          path: output/qcow2/*
           compression-level: 0
           retention-days: 7
