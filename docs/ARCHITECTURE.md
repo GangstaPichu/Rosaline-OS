@@ -174,12 +174,28 @@ not-yet-fixed:
   Also fixed alongside the hostname: Cinnamon — Rosaline's actual
   differentiator from stock Bazzite — was never the session someone
   would land on by default; you had to know to pick it from SDDM's
-  session list. `system_files/etc/sddm.conf.d/rosaline-default-session.conf`
-  now sets `[Autologin] Session=cinnamon` with `User=` left blank, which
-  SDDM treats as "preselect this session" rather than "log in
-  automatically" (autologin only triggers when both `User` and
-  `Session` are set). Neither fix has been through a real boot test
-  yet — that's the next thing to verify.
+  session list.
+
+  The first attempt at this got shipped, boot-tested, and turned out to
+  be a real regression: `[Autologin] Session=cinnamon` with `User=`
+  left blank was expected (per SDDM's own docs) to preselect the
+  session without logging anyone in, since autologin is documented as
+  needing both `User` and `Session` set. In practice it authenticated
+  an empty username anyway and dropped straight to the Cinnamon desktop
+  with no login screen at all — worse than the original friction, since
+  there was no way to even reach a login prompt. Replaced with the
+  mechanism SDDM actually uses to preselect a session:
+  `system_files/var/lib/sddm/state.conf`'s `[Last]` section
+  (`Session=cinnamon.desktop`, `User=` blank), which only seeds "last
+  selected session" state the greeter reads to preselect its combobox —
+  a completely different code path from `[Autologin]`, never triggers
+  authentication. `build.sh` chowns `/var/lib/sddm` to the `sddm` user
+  so the daemon can still update that file after a real login. Content
+  under `/var` in a bootc/ostree image is seeded into the real `/var`
+  on first boot only (existing local files are never overwritten by an
+  update), so this needs a fresh disk to test, not an in-place upgrade
+  of an already-booted VM. Not yet re-verified with a real boot — that,
+  plus the hostname fix above, is the next thing to check.
 
 ## Open questions / next steps
 

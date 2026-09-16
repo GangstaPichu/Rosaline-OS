@@ -56,6 +56,14 @@ rm -rf /boot/*
 dconf update
 gtk-update-icon-cache -f /usr/share/icons/hicolor || true
 
+# system_files/var/lib/sddm/state.conf preselects Cinnamon in the SDDM
+# greeter (see that file for why it's [Last], not [Autologin]). SDDM's
+# own package owns that directory; match its ownership so the daemon
+# can still rewrite the file on a real login. Non-fatal if the sddm
+# user somehow isn't present -- root-owned still works, just can't be
+# updated by an unprivileged daemon process.
+chown -R sddm:sddm /var/lib/sddm 2>/dev/null || true
+
 # Boot-test marker: lets CI/local VM smoke tests (see boot-test.yml,
 # `just boot-headless`) detect a successful boot deterministically by
 # watching the serial console for a fixed string, instead of guessing at
