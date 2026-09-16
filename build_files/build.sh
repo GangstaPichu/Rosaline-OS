@@ -69,6 +69,18 @@ gtk-update-icon-cache -f /usr/share/icons/hicolor || true
 # updated by an unprivileged daemon process.
 chown -R sddm:sddm /var/lib/sddm 2>/dev/null || true
 
+# Bazzite's own bazzite-autologin.service runs on every boot and writes
+# real [Autologin] config to /etc/sddm.conf.d/zz-*.conf -- the "zz-"
+# prefix makes it win over anything else, including the state.conf
+# preselection above, so the greeter never even appears and it logs
+# straight into plasma.desktop (hardcoded; it has no idea Cinnamon
+# exists). That's the right behavior for Bazzite's own gaming/desktop-
+# mode switching on handhelds, but wrong for Rosaline OS, which wants a
+# normal login screen with Cinnamon preselected, not skipped entirely.
+# Confirmed directly against a real boot: no login screen at all,
+# straight into Plasma's first-run wizard, before this was added.
+systemctl mask bazzite-autologin.service
+
 # Boot-test marker: lets CI/local VM smoke tests (see boot-test.yml,
 # `just boot-headless`) detect a successful boot deterministically by
 # watching the serial console for a fixed string, instead of guessing at

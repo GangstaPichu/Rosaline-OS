@@ -194,8 +194,31 @@ not-yet-fixed:
   under `/var` in a bootc/ostree image is seeded into the real `/var`
   on first boot only (existing local files are never overwritten by an
   update), so this needs a fresh disk to test, not an in-place upgrade
-  of an already-booted VM. Not yet re-verified with a real boot — that,
-  plus the hostname fix above, is the next thing to check.
+  of an already-booted VM.
+
+  Re-verified with a real boot, and `state.conf` turned out to be
+  correct but insufficient: no SDDM login screen appeared at all —
+  straight from the Plymouth splash into a logged-in Plasma session
+  (KDE's first-run "Welcome" wizard). Root cause: Bazzite's own
+  `bazzite-autologin.service` runs on *every* boot and writes real
+  `[Autologin]` config to `/etc/sddm.conf.d/zz-*.conf` — the `zz-`
+  prefix makes it win over `state.conf`'s preselection, and its session
+  choice is hardcoded to `plasma.desktop` (part of Bazzite's
+  gaming/desktop-mode autologin switching for handhelds, which has no
+  concept of Cinnamon). `build.sh` now masks that service, since
+  Rosaline OS wants a normal greeter with Cinnamon preselected, not an
+  autologin skip. Not yet re-verified with a real boot — that, plus
+  the hostname fix, is the next thing to check.
+
+  Separately, also root-caused and fixed: `bootc-image-builder`'s
+  native `--type vmdk` output defaults to the `streamOptimized`
+  subformat (compressed, sequential-write-only, meant for OVA/OVF
+  distribution) — confirmed via three repeatable VMware boot failures
+  at identical disk sectors, traced to the exact partition boundary in
+  the build's own manifest log. `build-test-disk.yml` now always
+  produces qcow2; README documents converting to vmdk locally with
+  `qemu-img convert` (which defaults to the normal writable
+  `monolithicSparse` subformat) for VirtualBox/VMware.
 
 ## Open questions / next steps
 
