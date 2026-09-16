@@ -6,11 +6,16 @@
 # packages that aren't already part of Bazzite/Nobara's gaming stack.
 set -ouex pipefail
 
+# dnf5 defaults to 3 parallel package downloads (max allowed is 20); the
+# CI runner's network can comfortably do more than that, and none of
+# this depends on download order.
+dnf5_opts=(--setopt=max_parallel_downloads=10)
+
 # Cinnamon gives people the option of a traditional, low-friction desktop
 # (a la Linux Mint) alongside Bazzite's existing KDE Plasma / gamescope
 # sessions -- SDDM lets users pick a session at login, nothing here removes
 # the gaming-focused defaults.
-dnf5 install -y \
+dnf5 install -y "${dnf5_opts[@]}" \
     cinnamon-desktop \
     cinnamon-session \
     cinnamon-control-center \
@@ -19,7 +24,7 @@ dnf5 install -y \
 
 # Small set of general-purpose desktop tools that Mint ships by default
 # and Bazzite doesn't, since Rosaline OS is meant for more than gaming.
-dnf5 install -y \
+dnf5 install -y "${dnf5_opts[@]}" \
     gnome-disk-utility \
     timeshift
 
@@ -36,7 +41,7 @@ grep -q '^ANSI_COLOR=' /usr/lib/os-release || echo 'ANSI_COLOR="0;35"' >> /usr/l
 # the plain fedora-bootc base used for the smoke flavor (`just smoke`)
 # doesn't ship plymouth/dconf/the icon-cache tool at all. Installing is
 # a no-op wherever they're already present.
-dnf5 install -y plymouth plymouth-plugin-script dconf gtk-update-icon-cache
+dnf5 install -y "${dnf5_opts[@]}" plymouth plymouth-plugin-script dconf gtk-update-icon-cache
 plymouth-set-default-theme rosaline-os
 
 # Regenerate the initramfs where bootc actually boots it from:
