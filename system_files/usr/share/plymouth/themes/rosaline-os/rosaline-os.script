@@ -1,0 +1,34 @@
+// Rosaline OS boot splash.
+//
+// Centered wordmark with a four-petal spinner underneath that rotates
+// once per refresh tick. Kept deliberately simple (no password-prompt
+// UI) — if full-disk encryption is enabled later this theme should grow
+// DisplayPasswordFunction/DisplayQuestionFunction handlers, otherwise
+// Plymouth falls back to a plain text prompt for those.
+
+Window.SetBackgroundTopColor(0.141, 0.125, 0.220);    // #242038
+Window.SetBackgroundBottomColor(0.212, 0.173, 0.275); // #362C46
+
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.x = Window.GetX() + Window.GetWidth() / 2 - logo.image.GetWidth() / 2;
+logo.y = Window.GetY() + Window.GetHeight() / 2 - logo.image.GetHeight() / 2 - 70;
+logo.sprite.SetPosition(logo.x, logo.y, 10000);
+
+spinner.image = Image("spinner.png");
+spinner.sprite = Sprite();
+spinner.x = Window.GetX() + Window.GetWidth() / 2 - spinner.image.GetWidth() / 2;
+spinner.y = logo.y + logo.image.GetHeight() + 50;
+spinner.sprite.SetPosition(spinner.x, spinner.y, 10000);
+
+spinner.angle = 0;
+
+fun refresh_callback() {
+  spinner.angle = (spinner.angle + 4) % 360;
+  spinner.rotated = spinner.image.Rotate(spinner.angle * 3.14159265 / 180);
+  spinner.sprite.SetImage(spinner.rotated);
+  spinner.sprite.SetX(Window.GetX() + Window.GetWidth() / 2 - spinner.rotated.GetWidth() / 2);
+  spinner.sprite.SetY(spinner.y);
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);

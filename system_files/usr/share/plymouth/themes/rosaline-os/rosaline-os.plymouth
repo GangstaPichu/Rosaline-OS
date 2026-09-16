@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Rosaline OS
+Description=Rosaline OS boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/rosaline-os
+ScriptFile=/usr/share/plymouth/themes/rosaline-os/rosaline-os.script

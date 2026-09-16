@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 400" width="1400" height="400">
+  <defs>
+    <radialGradient id="gem" cx="38%" cy="34%" r="75%">
+      <stop offset="0%" stop-color="#FFF8E7"/>
+      <stop offset="45%" stop-color="#F6D48C"/>
+      <stop offset="100%" stop-color="#D9A84E"/>
+    </radialGradient>
+    <path id="petalLight" d="M 256,256
+      C 226,222 214,160 222,108
+      C 226,78 238,52 256,34
+      L 256,256 Z"/>
+    <path id="petalDark" d="M 256,34
+      C 274,52 286,78 290,108
+      C 298,160 286,222 256,256
+      L 256,34 Z"/>
+  </defs>
+
+  <g transform="translate(-56,-56) scale(0.86)">
+    <g stroke="#7A5568" stroke-width="2" stroke-opacity="0.3" stroke-linejoin="round">
+      <g transform="rotate(0 256 256)">
+        <use href="#petalLight" fill="#F6AEBB"/>
+        <use href="#petalDark" fill="#E06B82"/>
+      </g>
+      <g transform="rotate(90 256 256)">
+        <use href="#petalLight" fill="#F8DDA0"/>
+        <use href="#petalDark" fill="#E5AC49"/>
+      </g>
+      <g transform="rotate(180 256 256)">
+        <use href="#petalLight" fill="#D2C2F2"/>
+        <use href="#petalDark" fill="#9B7FD1"/>
+      </g>
+      <g transform="rotate(270 256 256)">
+        <use href="#petalLight" fill="#ABDED2"/>
+        <use href="#petalDark" fill="#5CA99B"/>
+      </g>
+    </g>
+    <circle cx="256" cy="256" r="40" fill="url(#gem)" stroke="#7A5568" stroke-width="2.5"/>
+  </g>
+
+  <text x="420" y="242" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-weight="bold"
+        font-size="118" letter-spacing="4" fill="#F5EDE9">ROSALINE</text>
+  <text x="420" y="316" font-family="DejaVu Sans, Liberation Sans, sans-serif" font-weight="bold"
+        font-size="62" letter-spacing="14" fill="#F3C56E">OPERATING SYSTEM</text>
+</svg>

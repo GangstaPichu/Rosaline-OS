@@ -1,32 +1,32 @@
 name: Build Rosaline OS ISO
 
 # Builds an installable ISO from the already-published OCI image using
-# bootc-image-builder. Runs after a successful image build, or manually.
+# bootc-image-builder. Manual-only (see build.yml for why); run it after
+# a manual image build has pushed to GHCR.
 on:
-  workflow_run:
-    workflows: ["Build Rosaline OS image"]
-    branches: [main]
-    types: [completed]
   workflow_dispatch:
 
 env:
   IMAGE_NAME: rosaline-os
-  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   build-iso:
     name: Build ISO
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
       packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Compute lowercase image registry
+        # See the same step in build.yml -- github.repository_owner
+        # isn't lowercase and GHCR/OCI references must be.
+        run: echo "IMAGE_REGISTRY=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Free up disk space
-        uses: jlumbroso/free-disk-space@main
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           tool-cache: true
           android: true
@@ -38,7 +38,11 @@ jobs:
       - name: Build ISO with bootc-image-builder
         run: |
           mkdir -p output
-          sudo podman run --rm -it --privileged \
+          # bootc-image-builder no longer pulls its target image itself
+          # (found by actually running this pattern in another workflow)
+          # -- it must already be in local podman storage first.
+          sudo podman pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+          sudo podman run --rm --privileged \
             --pull=newer \
             --security-opt label=type:unconfined_t \
             -v "$PWD/output:/output" \
@@ -50,7 +54,7 @@ jobs:
             "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
 
       - name: Upload ISO artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rosaline-os-iso
           path: output/bootiso/*.iso

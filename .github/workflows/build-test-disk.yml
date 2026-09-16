@@ -1,0 +1,105 @@
+name: Build downloadable test disk
+
+# Produces a bootable qcow2 disk from the published image and uploads
+# it as a workflow artifact, for testing on a machine where none of
+# podman/bootc-image-builder/WSL2/KVM are available or wanted -- notably
+# Windows without Hyper-V enabled. See README.md's "Testing on Windows
+# without Hyper-V" section for what to do with the download, including
+# converting to vmdk for VirtualBox/VMware.
+#
+# Deliberately NOT offering --type vmdk here even though bootc-image-
+# builder supports it directly: confirmed against a real VMware boot
+# (repeatable I/O errors at fixed sectors, "Medium Error"/"Write
+# error", filesystem corruption) that its vmdk output defaults to the
+# "streamOptimized" subformat -- a compressed, sequential-write-only
+# format meant for OVA/OVF distribution, not for a live VM to boot and
+# write to. Confirmed via the run's own manifest log:
+# `org.osbuild.qemu`'s `"format": {"type": "vmdk", "subformat":
+# "streamOptimized"}`. bootc-image-builder's CLI/TOML config doesn't
+# expose a way to pick a different vmdk_subformat (that's an internal
+# osbuild manifest option), so qcow2 + a local `qemu-img convert`
+# (which defaults to the normal writable monolithicSparse subformat)
+# is the only reliable path to a bootable vmdk right now.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to convert"
+        default: "latest"
+        required: false
+
+env:
+  IMAGE_NAME: rosaline-os
+
+jobs:
+  build-disk:
+    name: Build and upload disk
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Compute lowercase image registry
+        # See the same step in build.yml -- github.repository_owner
+        # isn't lowercase and GHCR/OCI references must be.
+        run: echo "IMAGE_REGISTRY=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          swap-storage: false
+
+      - name: Build test disk
+        run: |
+          mkdir -p output
+          TAG="${{ github.event.inputs.tag || 'latest' }}"
+          # bootc-image-builder no longer pulls its target image itself
+          # (found by actually running this workflow) -- it must already
+          # be in local podman storage first.
+          sudo podman pull "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
+          sudo podman run --rm --privileged --pull=newer \
+            --security-opt label=type:unconfined_t \
+            -v "$PWD/output:/output" \
+            -v "$PWD/vm.toml:/config.toml:ro" \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            quay.io/centos-bootc/bootc-image-builder:latest \
+            --type qcow2 \
+            --rootfs ext4 \
+            --config /config.toml \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
+          # bootc-image-builder writes as root (privileged container), so
+          # output/qcow2/ is root-owned -- the next step runs as the
+          # normal runner user and needs read access to upload it (found
+          # by actually running an earlier version of this that also
+          # tried to write there: "gzip: disk.qcow2.gz: Permission
+          # denied").
+          sudo chown -R "$(id -u):$(id -g)" output
+          ls -la output/qcow2/
+
+      - name: Upload disk image
+        # No manual compression step here anymore -- measured on a real
+        # run (disk.qcow2 at 6,599,841,792 bytes -> disk.qcow2.gz at
+        # 6,520,050,761 bytes), gzip only shaved 1.2% off this file. The
+        # disk is already too dense (RPM payloads, binaries) to compress
+        # well, so a manual pigz pass was burning CI minutes for almost
+        # nothing. compression-level: 0 skips upload-artifact's own
+        # server-side zip compression too, for the same reason --
+        # GitHub's own docs recommend 0 "for large files that are not
+        # easily compressed, for significantly faster uploads". The
+        # exact filename bootc-image-builder picks isn't documented, so
+        # glob for it rather than hardcoding one (same approach
+        # build-iso.yml already uses for its *.iso).
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rosaline-os-test-disk
+          path: output/qcow2/*
+          compression-level: 0
+          retention-days: 7

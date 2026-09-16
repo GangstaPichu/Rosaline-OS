@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="gem" cx="38%" cy="34%" r="75%">
+      <stop offset="0%" stop-color="#FFF8E7"/>
+      <stop offset="45%" stop-color="#F6D48C"/>
+      <stop offset="100%" stop-color="#D9A84E"/>
+    </radialGradient>
+
+    <!-- compass-rose petal: a symmetric kite/needle shape, narrow
+         where it meets the center, widest at mid-length, narrow again
+         at the outward tip. Built as two mirrored halves sharing the
+         centerline so each can take a lighter/darker shade of the
+         same hue, like a faceted gem or a compass needle catching the
+         light from one side. -->
+    <path id="petalLight" d="M 256,256
+      C 226,222 214,160 222,108
+      C 226,78 238,52 256,34
+      L 256,256 Z"/>
+    <path id="petalDark" d="M 256,34
+      C 274,52 286,78 290,108
+      C 298,160 286,222 256,256
+      L 256,34 Z"/>
+
+    <!-- small secondary tick between each main point, the way a
+         compass rose marks its intercardinal directions -->
+    <path id="tick" d="M 256,152 L 261,190 L 256,208 L 251,190 Z"/>
+  </defs>
+
+  <!-- four main points, true 90-degree compass spacing (the old mark
+       used uneven angles for an organic "bloom" feel; a real compass
+       rose reads more intentional at exact N/E/S/W) -->
+  <g stroke="#7A5568" stroke-width="2" stroke-opacity="0.3" stroke-linejoin="round">
+    <g transform="rotate(0 256 256)">
+      <use href="#petalLight" fill="#F6AEBB"/>
+      <use href="#petalDark" fill="#E06B82"/>
+    </g>
+    <g transform="rotate(90 256 256)">
+      <use href="#petalLight" fill="#F8DDA0"/>
+      <use href="#petalDark" fill="#E5AC49"/>
+    </g>
+    <g transform="rotate(180 256 256)">
+      <use href="#petalLight" fill="#D2C2F2"/>
+      <use href="#petalDark" fill="#9B7FD1"/>
+    </g>
+    <g transform="rotate(270 256 256)">
+      <use href="#petalLight" fill="#ABDED2"/>
+      <use href="#petalDark" fill="#5CA99B"/>
+    </g>
+  </g>
+
+  <g fill="#F5EDE9" opacity="0.55">
+    <use href="#tick" transform="rotate(45 256 256)"/>
+    <use href="#tick" transform="rotate(135 256 256)"/>
+    <use href="#tick" transform="rotate(225 256 256)"/>
+    <use href="#tick" transform="rotate(315 256 256)"/>
+  </g>
+
+  <circle cx="256" cy="256" r="40" fill="url(#gem)" stroke="#7A5568" stroke-width="2.5"/>
+</svg>

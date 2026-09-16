@@ -1,0 +1,36 @@
+# bootc-image-builder config for local/CI *test* VM disks only (see
+# `just build-vm-image` / .github/workflows/boot-test.yml). Do NOT reuse
+# this for the real installer ISO -- iso.toml stays separate on purpose
+# so a real install always goes through Anaconda's normal interactive
+# user-creation screen instead of getting this throwaway account.
+#
+# Bakes in a disposable "rosaline" / "rosaline" account (password login,
+# wheel/sudo) purely so a test VM can be SSH'd into or logged into at the
+# console. Never ship an image built with this config, and never reuse
+# this password for anything real.
+[[customizations.user]]
+name = "rosaline"
+password = "rosaline"
+groups = ["wheel"]
+
+# Route the kernel/systemd console to the serial port (last console= wins
+# for /dev/console) so scripts/boot-check.sh can watch it with
+# -display none; tty0 stays first so an interactive `just boot` window
+# still shows output too.
+[customizations.kernel]
+append = "console=tty0 console=ttyS0,115200n8"
+
+# If your bootc-image-builder version rejects a plaintext password (some
+# builds require a pre-hashed one), replace the line above with a hash:
+#   openssl passwd -6 rosaline
+# and paste the "$6$..." result in as `password` instead.
+
+# Tried and confirmed NOT to help: a `[[customizations.filesystem]]
+# mountpoint = "/" minsize = "10 GiB"` block here, to see if it would
+# shrink the auto-sized ~26.7GB root partition (real content is only
+# ~6.6GB) and speed up the final raw-to-disk-format conversion stage.
+# A real run's `org.osbuild.truncate` stage showed the exact same
+# 28,632,416,256-byte size with or without it -- `minsize` is a floor,
+# and bootc-image-builder's own auto-computed size already sits above
+# whatever floor we set, so it never had anything to do. Not worth
+# re-adding without a different, verified approach.

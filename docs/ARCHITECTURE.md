@@ -67,10 +67,209 @@ next `bootc upgrade` (or via the desktop update notifier that Bazzite
 already ships). This keeps the "atomic, reproducible, easy to roll back"
 property that both Bazzite and SteamOS rely on.
 
+## Build verification status
+
+The container image itself has actually been built end-to-end and
+verified — not just reviewed — including running `podman build` for
+real against `ghcr.io/ublue-os/bazzite-nvidia:stable` and confirming
+`bootc container lint` passes (10 checks passed, 3 cosmetic warnings
+about non-empty `/boot`/`/run`/`/var` content, which is normal/expected
+for an image that just ran a Plymouth initramfs rebuild and dnf5).
+That run caught and fixed two real bugs that static review had missed:
+
+1. `plymouth-set-default-theme -R rosaline-os` failed with
+   `script.so does not exist` — the Bazzite base doesn't install the
+   `plymouth-plugin-script` package our `ModuleName=script` theme
+   depends on. Fixed by installing it in `build_files/build.sh` before
+   setting the theme.
+2. `build_files/cleanup.sh` ran `rm -rf /tmp/*`, but `/tmp/build_files`
+   is a live bind mount of the *host* `build_files/` directory for the
+   duration of that `RUN` step (see the Containerfile). `rm -rf`
+   recursed into it and deleted `build.sh`/`cleanup.sh` themselves
+   before failing to remove the (busy) mountpoint. Fixed by excluding
+   that one path from the cleanup.
+
+A third bug came out of the follow-up: `bootc container lint` flagged a
+non-empty `/boot`, because `plymouth-set-default-theme -R` regenerates
+the initramfs into `/boot`, which bootc ignores — the theme would never
+have appeared at boot. `build.sh` now runs `dracut` against
+`/usr/lib/modules/<kver>/initramfs.img` and clears `/boot`; the
+resulting initramfs was inspected with `lsinitrd` and contains the
+theme, `script.so`, and a `plymouthd.conf` pointing at it.
+
+**The smoke flavor has booted, end to end.** `just smoke` builds the
+same `build_files/` + `system_files/` on `quay.io/fedora/fedora-bootc:44`
+(2 GB instead of 13 GB), converts it to a qcow2, and boots it headless.
+That was run for real in the development sandbox — under pure TCG
+software emulation, no KVM — and the serial console showed
+`Booting initrd of Rosaline OS`, `Welcome to Rosaline OS!`,
+`plymouth-start.service` starting, and the `ROSALINE-OS-BOOT-OK`
+marker from `rosaline-boot-marker.service` about 90 guest-seconds in.
+So the package list resolves on Fedora 44, the build scripts work on a
+base that isn't Bazzite, the initramfs/Plymouth wiring is right, the
+dconf and marker units behave, and `bootc-image-builder` needs
+`--rootfs ext4` (the base declares no default; now passed everywhere).
+
+Two things that flavor cannot show: what the Plymouth theme *looks*
+like (serial console only), and anything in Bazzite's own stack
+(Nvidia driver, gamescope, KDE) — which Rosaline doesn't modify.
+
+The sandbox needed workarounds that are now checked in as
+`scripts/sandbox/build-disk.sh` (`just smoke-sandbox`): its kernel has
+no partition-table parsers (loop devices never get `pN` nodes; fixed by
+shimming osbuild's loopback device to call `partx -a`) and no vfat (the
+EFI partition can't be mounted; worked around by building a BIOS-only
+disk with the EFI bootloader component removed and partition 2 not
+typed as an ESP). Those are properties of that environment, not of the
+image; on a normal machine `just smoke` / `just build-vm-image` don't
+need them.
+
+**The real Bazzite-based image has now booted graphically, on real
+hardware (a Windows 10 PC, no Hyper-V/WSL2 available, so pure QEMU TCG
+software emulation via `.github/workflows/build-test-disk.yml`'s
+downloadable-disk path).** This is the first time anyone has seen it
+render, not just checked exit codes. It's a real mix of good and
+not-yet-fixed:
+
+- Boots to a usable, interactive KDE Plasma desktop (Bazzite's default
+  session) — confirmed via a working Konsole terminal and the desktop
+  context menu. `dev sandbox` couldn't show this; a person watching a
+  screen could.
+- The Nvidia driver module loads cleanly (`nvidia: module license
+  'NVIDIA' taints kernel`, `nvidia-nvlink` initializing) and correctly,
+  gracefully reports no hardware (`NVRM: No NVIDIA GPU found`) rather
+  than crashing — expected and correct for a VM with no GPU passthrough,
+  and the right signal that the driver bundle itself is intact.
+  Actual GPU behavior can only be verified on real hardware; that's a
+  separate, later step (a real install), not something any VM test can
+  cover.
+- greenboot health checks and `ostree-finalize-staged` complete
+  successfully; `bazzite-hardware-setup.service` runs.
+- Our own wallpaper config is correctly baked in — confirmed directly
+  in a live shell: `gsettings get org.cinnamon.desktop.background
+  picture-uri` returns our file, and `ls` confirms it exists at that
+  path, right size. It doesn't render by default only because the
+  default/autologin session is Plasma, not Cinnamon, and Plasma
+  doesn't read that key (see "Known gaps" below).
+- Three real, newly-found issues:
+  1. ~~**Hostname is still `bazzite`**~~ **Fixed**: `build.sh` never set
+     one, so it fell through to Bazzite's own baked-in
+     `/usr/lib/hostname`. `system_files/usr/lib/hostname` now ships
+     `rosaline`, which `COPY system_files /` lays down before Bazzite's
+     copy is ever touched by our build step, so it wins outright. Not
+     yet re-verified with a real boot (see below).
+  2. **SDDM doesn't reliably come back after logging out** of a
+     session — it fell back to a bare text console (tty3) instead of
+     re-showing the graphical greeter. Not yet root-caused; a fresh
+     boot's *first* SDDM screen works fine, so this is specific to the
+     logout → re-greet transition.
+  3. **The logout confirmation dialog itself was flaky** — reported by
+     the person testing it as repeatedly auto-closing before it could
+     be clicked, taking three attempts to catch it open. Not
+     root-caused; a plausible but unconfirmed guess is Plasma's logout
+     screen (QML/compositor-animated) behaving oddly under pure
+     software rendering with no GPU acceleration, but that's a
+     hypothesis, not a diagnosis.
+
+  Also fixed alongside the hostname: Cinnamon — Rosaline's actual
+  differentiator from stock Bazzite — was never the session someone
+  would land on by default; you had to know to pick it from SDDM's
+  session list.
+
+  The first attempt at this got shipped, boot-tested, and turned out to
+  be a real regression: `[Autologin] Session=cinnamon` with `User=`
+  left blank was expected (per SDDM's own docs) to preselect the
+  session without logging anyone in, since autologin is documented as
+  needing both `User` and `Session` set. In practice it authenticated
+  an empty username anyway and dropped straight to the Cinnamon desktop
+  with no login screen at all — worse than the original friction, since
+  there was no way to even reach a login prompt. Replaced with the
+  mechanism SDDM actually uses to preselect a session:
+  `system_files/var/lib/sddm/state.conf`'s `[Last]` section
+  (`Session=cinnamon.desktop`, `User=` blank), which only seeds "last
+  selected session" state the greeter reads to preselect its combobox —
+  a completely different code path from `[Autologin]`, never triggers
+  authentication. `build.sh` chowns `/var/lib/sddm` to the `sddm` user
+  so the daemon can still update that file after a real login. Content
+  under `/var` in a bootc/ostree image is seeded into the real `/var`
+  on first boot only (existing local files are never overwritten by an
+  update), so this needs a fresh disk to test, not an in-place upgrade
+  of an already-booted VM.
+
+  Re-verified with a real boot, and `state.conf` turned out to be
+  correct but insufficient: no SDDM login screen appeared at all —
+  straight from the Plymouth splash into a logged-in Plasma session
+  (KDE's first-run "Welcome" wizard). Root cause: Bazzite's own
+  `bazzite-autologin.service` runs on *every* boot and writes real
+  `[Autologin]` config to `/etc/sddm.conf.d/zz-*.conf` — the `zz-`
+  prefix makes it win over `state.conf`'s preselection, and its session
+  choice is hardcoded to `plasma.desktop` (part of Bazzite's
+  gaming/desktop-mode autologin switching for handhelds, which has no
+  concept of Cinnamon). `build.sh` now masks that service, since
+  Rosaline OS wants a normal greeter with Cinnamon preselected, not an
+  autologin skip. Not yet re-verified with a real boot — that, plus
+  the hostname fix, is the next thing to check.
+
+  Separately, also root-caused and fixed: `bootc-image-builder`'s
+  native `--type vmdk` output defaults to the `streamOptimized`
+  subformat (compressed, sequential-write-only, meant for OVA/OVF
+  distribution) — confirmed via three repeatable VMware boot failures
+  at identical disk sectors, traced to the exact partition boundary in
+  the build's own manifest log. `build-test-disk.yml` now always
+  produces qcow2; README documents converting to vmdk locally with
+  `qemu-img convert` (which defaults to the normal writable
+  `monolithicSparse` subformat) for VirtualBox/VMware.
+
 ## Open questions / next steps
 
-- **Branding**: wallpapers, Plymouth boot theme, and a real logo still
-  need to be added under `system_files/`.
+- **Branding**: reworked into a compass-rose concept (pastel palette,
+  cozy + adventurous, one point per merged distro same as before) —
+  see `assets/branding/README.md` for the concept and palette. Doesn't
+  implement a LUKS password prompt — see the comment at the top of
+  `rosaline-os.script`.
+- **First-boot wizard reskin**: KDE's upstream "Plasma Setup" (KISS)
+  wizard — confirmed via research to be a real, separate thing from
+  "Bazzite Portal" (a different, ujust-based tool) — runs once before
+  SDDM ever starts. Most of its branding is already dynamic for free
+  (the "Enjoy ___!" text reads `/etc/os-release` `NAME=`, the hostname
+  field reads the real system hostname), so `build.sh` only needs to
+  replace two genuinely hardcoded things: KDE's own Konqi/Katie mascot
+  art on the completion screen (now Rosaline's own mascot pair, reusing
+  the compass-rose mark as a "crown" so they read as part of the same
+  family) and Bazzite's own landing-screen wallpaper. This is scoped to
+  files the `plasma-setup` RPM itself owns (`rpm -ql`), never a broad
+  filesystem search, and is a no-op rather than a build failure if the
+  package isn't installed or none of its files match the expected
+  naming patterns — those exact installed paths were not independently
+  confirmed against a real package listing (no way to pull/run the
+  Bazzite base image in this dev sandbox), only researched from the
+  upstream KDE source tree and Bazzite's own patch files. Needs a real
+  boot to confirm it actually took effect, same as everything else in
+  this section.
+- **SDDM login screen background**: previously untouched (stock Breeze
+  theme) — the first real screen every session, not just first boot.
+  `build.sh` drops a `theme.conf.user` (`[General] background=...
+  type=image`) into every installed SDDM theme under
+  `/usr/share/sddm/themes/*/theme.conf` rather than one hardcoded
+  theme name, since Bazzite's exact theme directory name wasn't
+  independently confirmed — `theme.conf.user` is SDDM's own documented
+  update-safe local-override mechanism, not a patch to the theme
+  itself. Background image is AI-generated art with the same
+  provenance/process as the desktop wallpaper (see
+  `assets/branding/README.md`), with a soft radial vignette applied
+  (center darkened, edges untouched) so login text has a chance of
+  staying legible over it regardless of whether SDDM's own theme also
+  renders an opaque card behind the fields — that wasn't independently
+  confirmed either, hence covering for both cases rather than
+  assuming. Needs a real boot to confirm both the override actually
+  takes effect and that the vignette is enough.
+- **VM testing**: see "Build verification status" above — the smoke
+  flavor is verified end to end; the Bazzite-based image is verified
+  through the container build and needs a machine with more disk for
+  `just build-vm-image && just boot-check`. CI (`boot-test.yml`) can
+  now do this too since the repo went public (unlimited Actions
+  minutes) — still `workflow_dispatch`-only by choice, not by quota, so
+  the justfile stays the primary path for day-to-day iteration.
 - **Package list**: `build_files/build.sh` currently adds Cinnamon plus a
   couple of Mint-style utilities (Nemo, Timeshift, GNOME Disks). Further
   Nobara-specific packages not already covered by the Bazzite base
@@ -79,7 +278,99 @@ property that both Bazzite and SteamOS rely on.
 - **Handheld variant**: Bazzite also publishes handheld-focused images;
   a second Containerfile/base-image pairing could produce a
   Deck-like Rosaline OS variant later if wanted.
-- **Signing key**: CI currently signs with keyless cosign (Sigstore/OIDC).
-  If a dedicated cosign keypair is preferred instead, add
-  `cosign.pub`/`cosign.key` (via a repo secret) and update
-  `build.yml` accordingly.
+- **Security**: see "Security architecture" below — image signing, base
+  verification, and client-side enforcement are done and confirmed with
+  a real green CI run (not just the sandbox); pending is actually
+  rotating in a production keypair if the one generated during
+  development should be replaced, and deciding whether to also pin
+  `bootc-image-builder`/`fedora-bootc`/`registry:2` OCI *images* by
+  digest in the workflows and justfile (currently pulled by mutable tag
+  — lower risk than the GitHub Actions themselves since they're not
+  handed secrets or write access, but not nothing).
+
+## Security architecture
+
+Everything below was checked by actually running it against real
+artifacts in the development sandbox, not just written to spec —
+`security/README.md` has the how.
+
+**Signing.** Images are signed with a static cosign keypair (the
+`ghcr.io/ublue-os/bazzite-nvidia` image we build from is a real,
+working example of this exact approach: its own signature was decoded
+down to the raw Rekor transparency-log entry and confirmed to be a
+plain-key signature using precisely the key published at
+`ublue-os/bazzite`'s `cosign.pub`, which is also vendored here as
+`security/ublue-bazzite-cosign.pub`). `build.yml` verifies the base
+image against that key before building (`cosign verify --key
+security/ublue-bazzite-cosign.pub --new-bundle-format=false`), and
+signs the finished image with Rosaline OS's own key afterward
+(`secrets.SIGNING_SECRET`).
+
+**Confirmed in real CI**, not just the sandbox: `build.yml` run
+[#8](https://github.com/GangstaPichu/Rosaline-OS/actions/runs/35012539566)
+went green end to end (base-image verify → build → push → sign), and the
+result was independently checked outside that run too —
+`cosign verify --key cosign.pub --new-bundle-format=false
+ghcr.io/gangstapichu/rosaline-os:latest` against the real published image
+reports "The signatures were verified against the specified public key",
+and `skopeo inspect --no-creds` confirms the image pulls without
+credentials, which a fresh `bootc switch` needs. Getting here surfaced
+two more real bugs neither local testing nor review had caught:
+
+1. Every run of this workflow ever, across five unrelated commits, had
+   failed in 4-5 seconds with no logs. Cause: the repo was private on
+   GitHub's Free plan, which caps included Actions minutes with a $0
+   default spending limit for overage — every run failed before a
+   runner even started. Fixed by making the repo public (unlimited
+   Actions minutes; no code change).
+2. The first real run then got through base verification and the build,
+   but failed pushing: `Invalid image name
+   ghcr.io/GangstaPichu/rosaline-os:latest, unknown transport
+   ghcr.io/GangstaPichu/rosaline-os`. `github.repository_owner` is
+   `GangstaPichu` (mixed case), and GHCR/OCI references must be
+   all-lowercase — reproduced locally against the same podman version
+   to confirm before fixing. GitHub Actions expressions have no
+   built-in lowercase function, so all three workflows now compute
+   `IMAGE_REGISTRY` in a shell step (`tr '[:upper:]' '[:lower:]'`) and
+   export it via `$GITHUB_ENV` instead of interpolating
+   `${{ github.repository_owner }}` directly.
+
+**Client-side enforcement.** `system_files/etc/containers/policy.json`
+and `system_files/etc/containers/registries.d/rosaline-os.yaml` scope a
+`sigstoreSigned` requirement to `ghcr.io/gangstapichu/rosaline-os`
+specifically, leaving the rest of the system's default policy
+(`insecureAcceptAnything`, matching stock Fedora) untouched — so
+Flatpak/Distrobox/other registries keep working exactly as before, but
+`bootc upgrade` on a running Rosaline OS system now actually verifies
+signatures, which Bazzite itself doesn't enforce even though it signs.
+This was validated against a throwaway local registry with the same
+`policy.json`/`registries.d` mechanics (different scope name only):
+`skopeo copy` succeeded for a correctly-signed image, and failed with
+`cryptographic signature verification failed` for a wrong key and
+`A signature was required, but no signature exists` for a genuinely
+unsigned image at a different digest. (An earlier attempt using
+`skopeo inspect` for this test was a false positive in both directions
+— `inspect` doesn't consult `policy.json` at all; `copy`, which is what
+`podman pull`/`bootc` actually use, does.)
+
+Per `man containers-policy.json`: cosign-created signatures only
+contain repository identity, so `signedIdentity` must be
+`matchRepository` — the stricter default
+(`matchRepoDigestOrExact`) rejects every cosign signature outright.
+This means verification confirms an image came from our repository and
+was signed with our key, not that you got the exact tag you asked for
+over a substitution of another signed tag from the same repository —
+an inherent limit of cosign's identity model, not something this setup
+could tighten further.
+
+**Supply chain.** Every third-party GitHub Action in `.github/workflows/`
+is pinned to a commit SHA rather than a mutable tag (`v4`, `@main`,
+etc. can be repointed by the action's maintainer, or its account, to
+different code without any change on our end). SHAs were fetched fresh
+via `git ls-remote --tags` against each action's real repository for
+this work, matching the *currently-used major version* rather than
+jumping to a newer major that hasn't been exercised here (e.g. pinned
+`actions/checkout` to the latest `v4.x`, not `v7`). One of these,
+`sigstore/cosign-installer`, could be cross-checked against a real,
+independent pin: `ublue-os/bazzite`'s own `build.yml` pins the exact
+same commit for the same tag (`6f9f177…` for `v4.1.2`).
