@@ -28,7 +28,8 @@ dnf5_opts=(--setopt=max_parallel_downloads=10)
 dnf5 install -y "${dnf5_opts[@]}" \
     cinnamon \
     cinnamon-control-center \
-    nemo-fileroller
+    nemo-fileroller \
+    xorg-x11-server-Xorg
 
 # Hard verification, not best-effort: Cinnamon is Rosaline's actual
 # differentiator from stock Bazzite, so a build where it can't even
@@ -38,9 +39,15 @@ dnf5 install -y "${dnf5_opts[@]}" \
 # server for it to run on (Fedora 44's `cinnamon` package does also
 # ship a Wayland session, cinnamon-wayland.desktop, but state.conf
 # explicitly preselects the X11 one, so that's what has to exist).
-# Fail the build loudly here rather than discovering it three hours
-# into a VM boot test, which is how the missing-`cinnamon`-package bug
-# above got found in the first place.
+# xorg-x11-server-Xorg is explicitly listed above rather than assumed
+# because Bazzite's own sessions (Plasma, gamescope) are Wayland-first
+# -- nothing already on the base image pulls in an actual X server,
+# confirmed by a real build where cinnamon.desktop existed but Xorg
+# genuinely didn't, caught here rather than a VM boot. (Xorg coexisting
+# alongside Wayland Plasma is normal; SDDM already supports mixed
+# X11/Wayland sessions from the same greeter.) Fail the build loudly
+# rather than discovering any of this three hours into a VM boot test,
+# which is how the missing-`cinnamon`-package bug above got found.
 if [ ! -f /usr/share/xsessions/cinnamon.desktop ]; then
     echo "FATAL: /usr/share/xsessions/cinnamon.desktop is missing -- Cinnamon won't be selectable at the SDDM greeter at all." >&2
     exit 1
