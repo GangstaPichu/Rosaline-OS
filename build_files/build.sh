@@ -22,6 +22,24 @@ dnf5 install -y "${dnf5_opts[@]}" \
     nemo \
     nemo-fileroller
 
+# Hard verification, not best-effort: Cinnamon is Rosaline's actual
+# differentiator from stock Bazzite, so a build where it can't even
+# start has failed at its one job even if everything else succeeds.
+# Cinnamon is X11-only (no Wayland session), so this checks for both
+# the exact session file state.conf's [Last] Session=cinnamon.desktop
+# actually references and a working Xorg server -- not just that the
+# cinnamon-session package installed *something*. Fail the build
+# loudly here rather than discovering it three hours into a VM boot
+# test, which is how this got found the first time.
+if [ ! -f /usr/share/xsessions/cinnamon.desktop ]; then
+    echo "FATAL: /usr/share/xsessions/cinnamon.desktop is missing -- Cinnamon won't be selectable at the SDDM greeter at all." >&2
+    exit 1
+fi
+if ! rpm -q xorg-x11-server-Xorg &>/dev/null; then
+    echo "FATAL: xorg-x11-server-Xorg isn't installed -- Cinnamon (X11-only, no Wayland session) can't actually start without it." >&2
+    exit 1
+fi
+
 # Small set of general-purpose desktop tools that Mint ships by default
 # and Bazzite doesn't, since Rosaline OS is meant for more than gaming.
 dnf5 install -y "${dnf5_opts[@]}" \
@@ -102,15 +120,26 @@ if rpm -q plasma-setup &>/dev/null; then
     mascot_b=/usr/share/rosaline-os/mascot-b.png
     wallpaper=/usr/share/backgrounds/rosaline-os/rosaline-default.png
 
-    grep -i 'konqi.*\.png$' <<<"$plasma_setup_files" | while read -r f; do
-        [ -f "$f" ] && cp -f "$mascot_a" "$f"
-    done || true
-    grep -i 'katie.*\.png$' <<<"$plasma_setup_files" | while read -r f; do
-        [ -f "$f" ] && cp -f "$mascot_b" "$f"
-    done || true
-    grep -iE 'bazzite.*convergence.*\.(png|jpe?g)$' <<<"$plasma_setup_files" | while read -r f; do
-        [ -f "$f" ] && cp -f "$wallpaper" "$f"
-    done || true
+    konqi_matches="$(grep -i 'konqi.*\.png$' <<<"$plasma_setup_files" || true)"
+    katie_matches="$(grep -i 'katie.*\.png$' <<<"$plasma_setup_files" || true)"
+    wallpaper_matches="$(grep -iE 'bazzite.*convergence.*\.(png|jpe?g)$' <<<"$plasma_setup_files" || true)"
+
+    echo "plasma-setup reskin: konqi matches:"
+    echo "${konqi_matches:-  (none)}"
+    echo "plasma-setup reskin: katie matches:"
+    echo "${katie_matches:-  (none)}"
+    echo "plasma-setup reskin: wallpaper matches:"
+    echo "${wallpaper_matches:-  (none)}"
+
+    while read -r f; do
+        [ -f "$f" ] && cp -fv "$mascot_a" "$f"
+    done <<<"$konqi_matches"
+    while read -r f; do
+        [ -f "$f" ] && cp -fv "$mascot_b" "$f"
+    done <<<"$katie_matches"
+    while read -r f; do
+        [ -f "$f" ] && cp -fv "$wallpaper" "$f"
+    done <<<"$wallpaper_matches"
 else
     echo "plasma-setup not installed; skipping first-boot wizard reskin"
 fi
@@ -126,15 +155,19 @@ fi
 # and there are normally only one or two themes present anyway.
 login_bg=/usr/share/backgrounds/rosaline-os/rosaline-login.png
 shopt -s nullglob
+sddm_themes_found=0
 for theme_conf in /usr/share/sddm/themes/*/theme.conf; do
     theme_dir="$(dirname "$theme_conf")"
+    echo "SDDM reskin: writing ${theme_dir}/theme.conf.user"
     cat > "${theme_dir}/theme.conf.user" <<-EOF
 	[General]
 	background=${login_bg}
 	type=image
 	EOF
+    sddm_themes_found=$((sddm_themes_found + 1))
 done
 shopt -u nullglob
+echo "SDDM reskin: ${sddm_themes_found} theme(s) overridden"
 
 # Boot-test marker: lets CI/local VM smoke tests (see boot-test.yml,
 # `just boot-headless`) detect a successful boot deterministically by
