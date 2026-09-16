@@ -54,6 +54,39 @@ and the first `<wallpaper>` entry `render.py` writes into
 `gnome-background-properties` both point at that exact path, neither
 of which needs to change as long as the filename stays the same.
 
+## SDDM login background
+
+`rosaline-login.png`, wired in by `build_files/build.sh` via a
+`theme.conf.user` override on every installed SDDM theme (see the
+comment there for why every theme rather than one hardcoded name).
+Same provenance as the default wallpaper — AI-generated, waifu2x
+upscaled to 3344×1882 — with a soft radial vignette (center darkened,
+edges untouched) applied afterward so login text has a fighting chance
+of staying legible regardless of whether SDDM's own theme also renders
+an opaque panel behind the fields. Generation prompt:
+
+> A cozy yet adventurous digital painting in a soft painterly
+> watercolor style, matching the tone of the Atelier Resleriana video
+> game. The scene is a warm wooden cabin doorway or open window,
+> viewed from just inside, looking out onto a misty dawn landscape —
+> soft rolling hills, distant mountains, and a pale golden sunrise
+> breaking through gentle lavender and peach clouds. A small potted
+> plant and a softly lit lantern rest on the windowsill. Off to one
+> side of the composition (not the center), a glowing four-point
+> compass rose ornament hovers gently, with soft pastel petals in
+> blush pink, warm gold, lavender, and mint teal, each petal faceted
+> like a gem, with a small warm golden gem at its center. The overall
+> mood is quiet anticipation — the calm moment just before setting out
+> on a journey. The vertical center of the composition is kept darker,
+> softer, and less detailed than the edges, so text can sit legibly on
+> top of it. Soft gradients, gentle glowing highlights, minimal
+> clutter, no text, no logos, no characters, ultra-wide 16:9
+> composition.
+
+(The model didn't actually keep the center darker as asked — hence
+the vignette applied afterward instead of relying on the prompt
+alone.)
+
 ## Editing
 
 1. Edit the relevant `.svg` (plain text, no special tools required —

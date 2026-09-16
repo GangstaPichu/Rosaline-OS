@@ -246,6 +246,23 @@ not-yet-fixed:
   upstream KDE source tree and Bazzite's own patch files. Needs a real
   boot to confirm it actually took effect, same as everything else in
   this section.
+- **SDDM login screen background**: previously untouched (stock Breeze
+  theme) — the first real screen every session, not just first boot.
+  `build.sh` drops a `theme.conf.user` (`[General] background=...
+  type=image`) into every installed SDDM theme under
+  `/usr/share/sddm/themes/*/theme.conf` rather than one hardcoded
+  theme name, since Bazzite's exact theme directory name wasn't
+  independently confirmed — `theme.conf.user` is SDDM's own documented
+  update-safe local-override mechanism, not a patch to the theme
+  itself. Background image is AI-generated art with the same
+  provenance/process as the desktop wallpaper (see
+  `assets/branding/README.md`), with a soft radial vignette applied
+  (center darkened, edges untouched) so login text has a chance of
+  staying legible over it regardless of whether SDDM's own theme also
+  renders an opaque card behind the fields — that wasn't independently
+  confirmed either, hence covering for both cases rather than
+  assuming. Needs a real boot to confirm both the override actually
+  takes effect and that the vignette is enough.
 - **VM testing**: see "Build verification status" above — the smoke
   flavor is verified end to end; the Bazzite-based image is verified
   through the container build and needs a machine with more disk for

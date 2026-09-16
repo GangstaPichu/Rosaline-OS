@@ -115,6 +115,27 @@ else
     echo "plasma-setup not installed; skipping first-boot wizard reskin"
 fi
 
+# SDDM login screen background. `theme.conf.user` is the standard,
+# update-safe way SDDM themes take a local override (read on top of
+# the theme's own theme.conf, never touched by package updates) --
+# confirmed via the Breeze SDDM theme's own documented behavior,
+# rather than patching any theme's files directly. Applied to every
+# installed SDDM theme rather than hardcoding one theme's directory
+# name (e.g. "01-breeze-fedora"), since that exact name wasn't
+# independently confirmed against Bazzite's actual installed package,
+# and there are normally only one or two themes present anyway.
+login_bg=/usr/share/backgrounds/rosaline-os/rosaline-login.png
+shopt -s nullglob
+for theme_conf in /usr/share/sddm/themes/*/theme.conf; do
+    theme_dir="$(dirname "$theme_conf")"
+    cat > "${theme_dir}/theme.conf.user" <<-EOF
+	[General]
+	background=${login_bg}
+	type=image
+	EOF
+done
+shopt -u nullglob
+
 # Boot-test marker: lets CI/local VM smoke tests (see boot-test.yml,
 # `just boot-headless`) detect a successful boot deterministically by
 # watching the serial console for a fixed string, instead of guessing at
