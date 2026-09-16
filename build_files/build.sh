@@ -81,6 +81,40 @@ chown -R sddm:sddm /var/lib/sddm 2>/dev/null || true
 # straight into Plasma's first-run wizard, before this was added.
 systemctl mask bazzite-autologin.service
 
+# Reskin KDE's upstream "Plasma Setup" (KISS) first-boot wizard -- the
+# "Hostname: bazzite" / mascot / landing-wallpaper screens seen on a
+# real boot, confirmed to be KDE's own org.kde.plasmasetup, not a
+# separate "Bazzite Portal" tool. Most of it already rebrands itself
+# for free: the "Enjoy ___!" text reads /etc/os-release NAME= and the
+# hostname field reads the real system hostname, both already set
+# above. This replaces the two genuinely hardcoded pieces: KDE's own
+# Konqi/Katie mascot art on the completion screen, and Bazzite's own
+# landing-screen wallpaper. Scoped strictly to files the plasma-setup
+# RPM itself owns (rpm -ql), never a broad filesystem search, so this
+# can't touch Konqi/Katie art any other KDE app also ships.
+# Entirely best-effort: if plasma-setup isn't installed, or none of
+# its files match these patterns, this is a silent no-op, not a build
+# failure -- the exact installed paths weren't independently
+# confirmed against a real package listing.
+if rpm -q plasma-setup &>/dev/null; then
+    plasma_setup_files="$(rpm -ql plasma-setup)"
+    mascot_a=/usr/share/rosaline-os/mascot-a.png
+    mascot_b=/usr/share/rosaline-os/mascot-b.png
+    wallpaper=/usr/share/backgrounds/rosaline-os/rosaline-default.png
+
+    grep -i 'konqi.*\.png$' <<<"$plasma_setup_files" | while read -r f; do
+        [ -f "$f" ] && cp -f "$mascot_a" "$f"
+    done || true
+    grep -i 'katie.*\.png$' <<<"$plasma_setup_files" | while read -r f; do
+        [ -f "$f" ] && cp -f "$mascot_b" "$f"
+    done || true
+    grep -iE 'bazzite.*convergence.*\.(png|jpe?g)$' <<<"$plasma_setup_files" | while read -r f; do
+        [ -f "$f" ] && cp -f "$wallpaper" "$f"
+    done || true
+else
+    echo "plasma-setup not installed; skipping first-boot wizard reskin"
+fi
+
 # Boot-test marker: lets CI/local VM smoke tests (see boot-test.yml,
 # `just boot-headless`) detect a successful boot deterministically by
 # watching the serial console for a fixed string, instead of guessing at

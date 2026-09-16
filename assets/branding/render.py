@@ -6,6 +6,7 @@ mark.svg / wordmark.svg / wallpaper.svg.
 
 Requires: cairosvg, pillow  (pip install cairosvg pillow)
 """
+import io
 import math
 import pathlib
 
@@ -19,6 +20,7 @@ SYS = REPO_ROOT / "system_files"
 MARK_SVG = HERE / "mark.svg"
 WORDMARK_SVG = HERE / "wordmark.svg"
 WALLPAPER_SVG = HERE / "wallpaper.svg"
+MASCOT_SVG = HERE / "mascot.svg"
 
 ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512]
 
@@ -114,7 +116,30 @@ def render_plymouth():
     print("plymouth assets: done")
 
 
+def render_mascots():
+    # mascot.svg is a single 800x640 canvas with two characters side by
+    # side (Rosie left half, Sage right half) so they share one set of
+    # <defs> (the crown, the body template) -- render once at 2x for
+    # crispness, then split into the two files build.sh actually
+    # installs over KDE's own Konqi/Katie art.
+    out_dir = SYS / "usr/share/rosaline-os"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    scale = 2
+    full = cairosvg.svg2png(
+        url=str(MASCOT_SVG),
+        output_width=800 * scale,
+        output_height=640 * scale,
+    )
+    canvas = Image.open(io.BytesIO(full))
+    half = canvas.width // 2
+    canvas.crop((0, 0, half, canvas.height)).save(out_dir / "mascot-a.png")
+    canvas.crop((half, 0, canvas.width, canvas.height)).save(out_dir / "mascot-b.png")
+    print("mascots: done")
+
+
 if __name__ == "__main__":
     render_icons()
     render_wallpaper()
     render_plymouth()
+    render_mascots()

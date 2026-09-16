@@ -222,11 +222,30 @@ not-yet-fixed:
 
 ## Open questions / next steps
 
-- **Branding**: done for a first pass — logo/icon, wallpaper, and a
-  Plymouth boot theme live in `system_files/` (sources + regeneration
-  script in `assets/branding/`). It doesn't implement a LUKS password
-  prompt — see `assets/branding/README.md` and the comment at the top of
+- **Branding**: reworked into a compass-rose concept (pastel palette,
+  cozy + adventurous, one point per merged distro same as before) —
+  see `assets/branding/README.md` for the concept and palette. Doesn't
+  implement a LUKS password prompt — see the comment at the top of
   `rosaline-os.script`.
+- **First-boot wizard reskin**: KDE's upstream "Plasma Setup" (KISS)
+  wizard — confirmed via research to be a real, separate thing from
+  "Bazzite Portal" (a different, ujust-based tool) — runs once before
+  SDDM ever starts. Most of its branding is already dynamic for free
+  (the "Enjoy ___!" text reads `/etc/os-release` `NAME=`, the hostname
+  field reads the real system hostname), so `build.sh` only needs to
+  replace two genuinely hardcoded things: KDE's own Konqi/Katie mascot
+  art on the completion screen (now Rosaline's own mascot pair, reusing
+  the compass-rose mark as a "crown" so they read as part of the same
+  family) and Bazzite's own landing-screen wallpaper. This is scoped to
+  files the `plasma-setup` RPM itself owns (`rpm -ql`), never a broad
+  filesystem search, and is a no-op rather than a build failure if the
+  package isn't installed or none of its files match the expected
+  naming patterns — those exact installed paths were not independently
+  confirmed against a real package listing (no way to pull/run the
+  Bazzite base image in this dev sandbox), only researched from the
+  upstream KDE source tree and Bazzite's own patch files. Needs a real
+  boot to confirm it actually took effect, same as everything else in
+  this section.
 - **VM testing**: see "Build verification status" above — the smoke
   flavor is verified end to end; the Bazzite-based image is verified
   through the container build and needs a machine with more disk for
