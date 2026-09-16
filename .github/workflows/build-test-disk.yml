@@ -1,18 +1,20 @@
 name: Build downloadable test disk
 
-# Produces a bootable qcow2 disk from the published image and uploads it
-# as a workflow artifact, for testing on a machine where none of
+# Produces a bootable disk from the published image and uploads it as a
+# workflow artifact, for testing on a machine where none of
 # podman/bootc-image-builder/WSL2/KVM are available or wanted -- notably
-# Windows without Hyper-V enabled. Boot the download with a native
-# Windows QEMU build in pure software-emulation mode (no WHPX, no
-# hardware virtualization at all, so it can't touch whatever makes
-# Hyper-V itself unstable on that machine): see README.md's
-# "Testing on Windows without Hyper-V" section.
+# Windows without Hyper-V enabled. See README.md's "Testing on Windows
+# without Hyper-V" section for what to do with the download.
+#
+# `format` picks bootc-image-builder's own output type directly (it
+# supports vmdk natively -- no local `qemu-img convert` needed) so the
+# artifact drops straight into VirtualBox/VMware, or qcow2 for plain
+# QEMU. Defaults to vmdk.
 #
 # This does the same conversion as boot-test.yml but keeps producing a
 # downloadable artifact as a separate concern from CI's own headless
-# boot-check, and skips the boot-check here so a slow artifact upload
-# isn't blocked behind it.
+# boot-check (which always uses qcow2), and skips the boot-check here
+# so a slow artifact upload isn't blocked behind it.
 on:
   workflow_dispatch:
     inputs:
@@ -20,13 +22,20 @@ on:
         description: "Image tag to convert"
         default: "latest"
         required: false
+      format:
+        description: "Disk format (vmdk for VirtualBox/VMware, qcow2 for plain QEMU)"
+        type: choice
+        options:
+          - vmdk
+          - qcow2
+        default: vmdk
 
 env:
   IMAGE_NAME: rosaline-os
 
 jobs:
   build-disk:
-    name: Build and upload qcow2
+    name: Build and upload disk
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -50,10 +59,12 @@ jobs:
           large-packages: false
           swap-storage: false
 
-      - name: Build qcow2 test disk
+      - name: Build test disk
         run: |
           mkdir -p output
           TAG="${{ github.event.inputs.tag || 'latest' }}"
+          FORMAT="${{ github.event.inputs.format || 'vmdk' }}"
+          echo "FORMAT=${FORMAT}" >> "$GITHUB_ENV"
           # bootc-image-builder no longer pulls its target image itself
           # (found by actually running this workflow) -- it must already
           # be in local podman storage first.
@@ -64,35 +75,37 @@ jobs:
             -v "$PWD/vm.toml:/config.toml:ro" \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             quay.io/centos-bootc/bootc-image-builder:latest \
-            --type qcow2 \
+            --type "${FORMAT}" \
             --rootfs ext4 \
             --config /config.toml \
             "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
           # bootc-image-builder writes as root (privileged container), so
-          # output/qcow2/ is root-owned -- the next step runs as the
+          # output/<format>/ is root-owned -- the next step runs as the
           # normal runner user and needs write access to create the .gz
-          # alongside it (found by actually running this: "gzip:
-          # disk.qcow2.gz: Permission denied").
+          # alongside it (found by actually running this with qcow2:
+          # "gzip: disk.qcow2.gz: Permission denied").
           sudo chown -R "$(id -u):$(id -g)" output
-          ls -la output/qcow2/
+          ls -la "output/${FORMAT}/"
 
       - name: Compress the disk image
-        # qcow2 is already sparse, but OS content still compresses
-        # meaningfully -- worth the extra CI minutes to cut download
-        # time on the other end. pigz produces standard gzip output
-        # (still opens natively in 7-Zip/Windows tar) but spreads the
-        # work across every core the runner has instead of gzip's
-        # single thread, which matters at this file's size (~6-7GB).
+        # Sparse but still compresses meaningfully -- worth the extra CI
+        # minutes to cut download time on the other end. pigz produces
+        # standard gzip output (opens natively in 7-Zip/Windows tar) but
+        # spreads the work across every core the runner has instead of
+        # gzip's single thread, which matters at this file's size
+        # (~6-7GB). The exact filename bootc-image-builder picks isn't
+        # documented, so glob for it rather than hardcoding one (same
+        # approach build-iso.yml already uses for its *.iso).
         run: |
           sudo apt-get update
           sudo apt-get install -y pigz
-          cd output/qcow2
-          pigz -k disk.qcow2
+          cd "output/${FORMAT}"
+          pigz -k *
           ls -la
 
       - name: Upload compressed disk image
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: rosaline-os-test-disk
-          path: output/qcow2/disk.qcow2.gz
+          name: rosaline-os-test-disk-${{ env.FORMAT }}
+          path: output/${{ env.FORMAT }}/*.gz
           retention-days: 7

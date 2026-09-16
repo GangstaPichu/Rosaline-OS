@@ -122,50 +122,78 @@ that actually needs real Linux, and just boot the result locally:
    never the branch actually running — this repo dispatches it
    explicitly instead so it works from any branch). If you only need a
    disk from what's already published and don't need a rebuild, you can
-   still run **"Build downloadable test disk"** on its own.
-2. **Wait for both to finish**, then download the `rosaline-os-test-disk`
-   artifact from the second workflow's run. It pulls the published
-   image, converts it to a qcow2 with `bootc-image-builder` (needs
-   privileged containers and loop devices — real Linux, which is why
-   this runs in CI rather than on Windows), compresses it with `pigz`
-   (parallel gzip — same `.gz` format, just faster to produce on a
-   multi-core runner), and uploads it as a workflow artifact (~7 day
+   still run **"Build downloadable test disk"** on its own — it takes a
+   `format` input (`vmdk` or `qcow2`, see below), defaulting to `vmdk`.
+2. **Wait for both to finish**, then download the
+   `rosaline-os-test-disk-vmdk` (or `-qcow2`) artifact from the second
+   workflow's run. It pulls the published image, converts it directly
+   with `bootc-image-builder` (needs privileged containers and loop
+   devices — real Linux, which is why this runs in CI rather than on
+   Windows) into whichever format you asked for, compresses it with
+   `pigz` (parallel gzip — same `.gz` format, just faster to produce on
+   a multi-core runner), and uploads it as a workflow artifact (~7 day
    retention). It's a multi-GB download either way; compression cuts it
    down some but budget time.
 3. **Download and decompress** the artifact. 7-Zip opens `.gz` directly,
-   or in PowerShell: `tar -xzf disk.qcow2.gz` (Windows 10 1803+ ships a
+   or in PowerShell: `tar -xzf disk.vmdk.gz` (Windows 10 1803+ ships a
    `tar.exe` that handles gzip).
-4. **Install QEMU for Windows** — a *native* Windows build, no WSL:
-   `choco install qemu` (Chocolatey) or `scoop install qemu` (Scoop),
-   or the installer from <https://qemu.weilnetz.de/w64/> (the build
-   linked from qemu.org's own downloads page) if you don't use a
-   package manager.
-5. **Boot it in pure software emulation** — no `-accel whpx`, no
-   `-enable-kvm`, nothing that touches VT-x/AMD-V or the hypervisor
-   layer at all, so it can't trigger whatever makes Hyper-V unstable on
-   that machine. Slower than hardware-accelerated (expect it to feel
-   sluggish, especially at the boot splash), but fine for a one-time
-   "does this actually boot and look right" check:
-   ```powershell
-   qemu-system-x86_64.exe -accel tcg -m 8G -smp 8 `
-     -drive file=disk.qcow2,if=virtio,format=qcow2,cache=writeback `
-     -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0
-   ```
-   `-smp` and `cache=writeback` are worth tuning to your actual machine
-   — TCG's multi-threaded mode runs each virtual CPU on its own host
-   thread, so a `-smp` closer to your real core/thread count lets more
-   of the guest's own parallel boot work (systemd starting units
-   concurrently, desktop session startup) actually happen at once
-   instead of serializing; `cache=writeback` speeds up disk-heavy
-   moments like the initial boot and is safe here since this disk is
-   disposable. Neither is a magic multiplier — a lot of boot is
-   inherently single-threaded, and TCG's per-instruction translation
-   overhead doesn't go away — but both help.
-   Log in with the throwaway `rosaline`/`rosaline` account (from
-   `vm.toml` — never used on a real install).
 
-This disk is for boot-testing only, same as `vm.toml`'s local
-equivalent — never install from it for real.
+From here, pick one:
+
+#### VirtualBox or VMware (recommended — hardware-accelerated)
+
+With Hyper-V off (and **Windows Security → Device security → Core
+isolation → Memory integrity** also off — if that's on, Windows runs
+the Hyper-V hypervisor invisibly underneath regardless of the Hyper-V
+Windows feature's own on/off switch, and both apps below silently fall
+back to a slow emulated mode), VirtualBox and VMware Workstation Pro
+(free for personal use) both drive VT-x directly instead of emulating
+it, which is the difference between "sluggish" and "normal speed."
+
+Use the `vmdk` format from step 2 above — no conversion needed, it's a
+disk format both tools already understand. Create a new VM pointed at
+that `disk.vmdk`, give it EFI/UEFI firmware (both bootc's qcow2 and
+vmdk outputs are GPT+ESP, not legacy BIOS), 8GB+ RAM, and as many
+cores as you're comfortable giving it. Log in with the throwaway
+`rosaline`/`rosaline` account (from `vm.toml` — never used on a real
+install).
+
+If you already have an old `.qcow2` around and don't want to
+re-download, `qemu-img convert -O vmdk disk.qcow2 disk.vmdk` (from a
+QEMU install) does the same conversion locally — just remember it's a
+one-time snapshot, not a link, so re-run it after every new qcow2.
+
+#### Plain QEMU (no extra software, but slower)
+
+If you'd rather not install another hypervisor, request `qcow2` from
+step 1/2 above and boot it in QEMU's own software emulation — no
+`-accel whpx`, no `-enable-kvm`, nothing that touches VT-x/AMD-V or the
+hypervisor layer at all, so it can't trigger whatever makes Hyper-V
+unstable on that machine, but noticeably slower (expect it to feel
+sluggish, especially at the boot splash):
+```powershell
+qemu-system-x86_64.exe -accel tcg -m 8G -smp 8 `
+  -drive file=disk.qcow2,if=virtio,format=qcow2,cache=writeback `
+  -device virtio-vga -usb -device usb-tablet -device virtio-rng-pci `
+  -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0
+```
+`-smp` and `cache=writeback` are worth tuning to your actual machine —
+TCG's multi-threaded mode runs each virtual CPU on its own host
+thread, so a `-smp` closer to your real core/thread count lets more of
+the guest's own parallel boot work (systemd starting units
+concurrently, desktop session startup) actually happen at once instead
+of serializing; `cache=writeback` speeds up disk-heavy moments like the
+initial boot and is safe here since this disk is disposable.
+`virtio-vga` is the proper paravirtual display for a Linux guest;
+`usb-tablet` gives the mouse absolute positioning so the window stops
+grabbing your cursor; `virtio-rng-pci` feeds the guest entropy so early
+boot doesn't stall waiting for it. None of this is a magic multiplier
+— a lot of boot is inherently single-threaded, and TCG's
+per-instruction translation overhead doesn't go away — but it helps.
+Same login as above.
+
+Either way, this disk is for boot-testing only, same as `vm.toml`'s
+local equivalent — never install from it for real.
 
 ## Installing / switching to Rosaline OS
 
