@@ -175,13 +175,22 @@ fi
 # independently confirmed against Bazzite's actual installed package,
 # and there are normally only one or two themes present anyway.
 #
-# Globs on metadata.desktop, not theme.conf: a real build found zero
-# matches globbing on theme.conf specifically, and metadata.desktop is
-# the file SDDM actually requires to recognize a directory as a theme
-# at all (per SDDM's own theme-discovery mechanism) -- theme.conf
-# itself is optional, a theme can rely entirely on QML defaults
-# without shipping one, which is apparently what happened here.
-# theme.conf.user doesn't need a sibling theme.conf to work.
+# Globs on metadata.desktop, not theme.conf: metadata.desktop is the
+# file SDDM actually requires to recognize a directory as a theme at
+# all (per SDDM's own theme-discovery mechanism) -- theme.conf itself
+# is optional. theme.conf.user doesn't need a sibling theme.conf to
+# work.
+#
+# sddm-breeze is what actually ships /usr/share/sddm/themes/ (the
+# Breeze and Breeze-Fedora greeter themes, from the plasma-workspace
+# source package) -- confirmed missing entirely from the Bazzite-nvidia
+# base image by a real build: /usr/share/sddm/themes/ didn't exist at
+# all (not just an empty/unmatched glob), caught by the diagnostic
+# `ls` added after the metadata.desktop glob fix still found zero
+# themes. Installed explicitly here rather than assumed, same lesson
+# as the cinnamon/Xorg fixes above.
+dnf5 install -y "${dnf5_opts[@]}" sddm-breeze
+
 login_bg=/usr/share/backgrounds/rosaline-os/rosaline-login.png
 shopt -s nullglob
 sddm_themes_found=0
