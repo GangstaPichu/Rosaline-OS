@@ -25,20 +25,12 @@ append = "console=tty0 console=ttyS0,115200n8"
 #   openssl passwd -6 rosaline
 # and paste the "$6$..." result in as `password` instead.
 
-# EXPERIMENT, not a confirmed fix: without this, bootc-image-builder
-# auto-sizes the root partition to ~26.7GB (seen directly in a real
-# run's `org.osbuild.truncate` stage) even though the actual content
-# only needs ~6.6GB -- and the final `org.osbuild.qemu` raw-to-qcow2/
-# vmdk conversion stage (28% of total build time, 222s in that same
-# run) has to work across that whole disk. `minsize` is documented as a
-# floor, not a cap, so this may not actually shrink anything if 26.7GB
-# is content-driven rather than a default margin -- and there's a
-# currently-open upstream bug (osbuild/bootc-image-builder#577) about
-# filesystem customizations not always taking effect from a TOML
-# config. Only keep this if a real run's log (grep for
-# "org.osbuild.truncate" and the "qemu" stage's Duration, same as
-# before) actually shows a smaller disk and a faster qemu stage --
-# revert it otherwise rather than leave an unverified guess in place.
-[[customizations.filesystem]]
-mountpoint = "/"
-minsize = "10 GiB"
+# Tried and confirmed NOT to help: a `[[customizations.filesystem]]
+# mountpoint = "/" minsize = "10 GiB"` block here, to see if it would
+# shrink the auto-sized ~26.7GB root partition (real content is only
+# ~6.6GB) and speed up the final raw-to-disk-format conversion stage.
+# A real run's `org.osbuild.truncate` stage showed the exact same
+# 28,632,416,256-byte size with or without it -- `minsize` is a floor,
+# and bootc-image-builder's own auto-computed size already sits above
+# whatever floor we set, so it never had anything to do. Not worth
+# re-adding without a different, verified approach.
