@@ -6,15 +6,53 @@ actual installed files under `system_files/`.
 
 - `mark.svg` — the icon/logo mark alone (a four-point compass rose:
   one point per merged distro, unified around a center gem). Used for
-  the hicolor icon theme, pixmaps, and as the base of the wallpaper's
-  watermark.
+  the hicolor icon theme, pixmaps, and as the base of a mini "crown"
+  worn by the mascot pair.
 - `wordmark.svg` — mark + "ROSALINE / OPERATING SYSTEM" lockup, on a
   transparent background. Used as the Plymouth boot logo.
-- `wallpaper.svg` — the default desktop wallpaper (dusk gradient,
-  colored aura, a scatter of stars, a faint travelled-path line, and
-  the watermark mark), 3840×2160.
-- `render.py` — regenerates every PNG/SVG under `system_files/` from the
-  three files above.
+- `mascot.svg` — the mascot pair ("Rosie" and "Sage"), each wearing a
+  mini compass-rose crown, replacing KDE's own Konqi/Katie art on the
+  first-boot wizard's completion screen (see `build_files/build.sh`).
+- `wallpaper.svg` — the **secondary** selectable wallpaper (dusk
+  gradient, colored aura, a scatter of stars, a faint travelled-path
+  line, and the watermark mark), 3840×2160, shipped as
+  `rosaline-compass.png`.
+- `render.py` — regenerates every generated PNG/SVG under
+  `system_files/` from the `.svg` sources above. Does **not** touch
+  `system_files/usr/share/backgrounds/rosaline-os/rosaline-default.png`
+  — see "Default wallpaper" below.
+
+## Default wallpaper
+
+The actual default wallpaper (`rosaline-default.png`) isn't generated
+by `render.py` — it's a static asset with no editable vector source.
+It's AI-generated art ("Celestial Compass at Twilight"), upscaled with
+waifu2x (Artwork style, Medium noise reduction, 2x) to 3344×1882.
+Prompt used, for reproducing or varying it later:
+
+> A serene desktop wallpaper in a soft painterly watercolor style,
+> evoking both coziness and adventure — like the tone of the Atelier
+> Resleriana video game. A dusky twilight sky gradient transitioning
+> from deep indigo-violet at the top through warm mauve to a soft
+> peach glow near the horizon. Scattered small stars twinkle in the
+> upper sky. In the lower-right area, a glowing four-point compass
+> rose motif blooms like a stylized flower, with soft pastel petals in
+> blush pink, warm gold, lavender, and mint teal, each petal faceted
+> like a gem catching gentle light, with a small warm golden gem at
+> its center. A faint, thin dotted or dashed path/trail curves gently
+> across the lower portion of the image, like a road disappearing into
+> the distance, suggesting a journey. Soft glowing color auras (pink,
+> gold, lavender, teal) bloom around the compass rose like bokeh
+> light. The overall feeling is calm, inviting, and quietly
+> adventurous — a moment of rest before setting out. Ultra-wide 16:9
+> desktop wallpaper composition, no text, no logos, no characters,
+> soft gradients, gentle lighting, minimal and uncluttered.
+
+If you replace it, keep the filename `rosaline-default.png` — the
+dconf defaults in `system_files/etc/dconf/db/local.d/01-rosaline-branding`
+and the first `<wallpaper>` entry `render.py` writes into
+`gnome-background-properties` both point at that exact path, neither
+of which needs to change as long as the filename stays the same.
 
 ## Editing
 

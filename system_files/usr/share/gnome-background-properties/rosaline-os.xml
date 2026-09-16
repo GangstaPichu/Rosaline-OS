@@ -9,4 +9,12 @@
     <pcolor>#242038</pcolor>
     <scolor>#242038</scolor>
   </wallpaper>
+  <wallpaper deleted="false">
+    <name>Rosaline OS (Compass Rose)</name>
+    <filename>/usr/share/backgrounds/rosaline-os/rosaline-compass.png</filename>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#242038</pcolor>
+    <scolor>#242038</scolor>
+  </wallpaper>
 </wallpapers>

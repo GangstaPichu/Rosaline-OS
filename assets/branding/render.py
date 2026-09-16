@@ -54,11 +54,20 @@ def render_icons():
 
 
 def render_wallpaper():
+    # rosaline-default.png is NOT generated here -- it's the AI-generated
+    # "Celestial Compass at Twilight" scenic wallpaper (see
+    # assets/branding/README.md for provenance/prompt), placed directly
+    # under system_files/ as a static asset since there's no editable
+    # vector source to regenerate it from. This function only renders
+    # the original abstract compass-rose wallpaper, kept as a second
+    # selectable option under its own filename so it never collides
+    # with (or gets overwritten by re-running this script over) the
+    # scenic default.
     bg_dir = SYS / "usr/share/backgrounds/rosaline-os"
     bg_dir.mkdir(parents=True, exist_ok=True)
     cairosvg.svg2png(
         url=str(WALLPAPER_SVG),
-        write_to=str(bg_dir / "rosaline-default.png"),
+        write_to=str(bg_dir / "rosaline-compass.png"),
         output_width=3840,
         output_height=2160,
     )
@@ -72,6 +81,14 @@ def render_wallpaper():
   <wallpaper deleted="false">
     <name>Rosaline OS</name>
     <filename>/usr/share/backgrounds/rosaline-os/rosaline-default.png</filename>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#242038</pcolor>
+    <scolor>#242038</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Rosaline OS (Compass Rose)</name>
+    <filename>/usr/share/backgrounds/rosaline-os/rosaline-compass.png</filename>
     <options>zoom</options>
     <shade_type>solid</shade_type>
     <pcolor>#242038</pcolor>
