@@ -151,9 +151,13 @@ not-yet-fixed:
   path, right size. It doesn't render by default only because the
   default/autologin session is Plasma, not Cinnamon, and Plasma
   doesn't read that key (see "Known gaps" below).
-- Three real, newly-found issues, not yet fixed:
-  1. **Hostname is still `bazzite`** (visible at the tty login prompt:
-     `bazzite login:`) — `build.sh` never sets one.
+- Three real, newly-found issues:
+  1. ~~**Hostname is still `bazzite`**~~ **Fixed**: `build.sh` never set
+     one, so it fell through to Bazzite's own baked-in
+     `/usr/lib/hostname`. `system_files/usr/lib/hostname` now ships
+     `rosaline`, which `COPY system_files /` lays down before Bazzite's
+     copy is ever touched by our build step, so it wins outright. Not
+     yet re-verified with a real boot (see below).
   2. **SDDM doesn't reliably come back after logging out** of a
      session — it fell back to a bare text console (tty3) instead of
      re-showing the graphical greeter. Not yet root-caused; a fresh
@@ -166,6 +170,16 @@ not-yet-fixed:
      screen (QML/compositor-animated) behaving oddly under pure
      software rendering with no GPU acceleration, but that's a
      hypothesis, not a diagnosis.
+
+  Also fixed alongside the hostname: Cinnamon — Rosaline's actual
+  differentiator from stock Bazzite — was never the session someone
+  would land on by default; you had to know to pick it from SDDM's
+  session list. `system_files/etc/sddm.conf.d/rosaline-default-session.conf`
+  now sets `[Autologin] Session=cinnamon` with `User=` left blank, which
+  SDDM treats as "preselect this session" rather than "log in
+  automatically" (autologin only triggers when both `User` and
+  `Session` are set). Neither fix has been through a real boot test
+  yet — that's the next thing to verify.
 
 ## Open questions / next steps
 
