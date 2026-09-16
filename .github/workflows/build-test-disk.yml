@@ -79,10 +79,15 @@ jobs:
       - name: Compress the disk image
         # qcow2 is already sparse, but OS content still compresses
         # meaningfully -- worth the extra CI minutes to cut download
-        # time on the other end. .gz opens natively in 7-Zip/Windows.
+        # time on the other end. pigz produces standard gzip output
+        # (still opens natively in 7-Zip/Windows tar) but spreads the
+        # work across every core the runner has instead of gzip's
+        # single thread, which matters at this file's size (~6-7GB).
         run: |
+          sudo apt-get update
+          sudo apt-get install -y pigz
           cd output/qcow2
-          gzip -k disk.qcow2
+          pigz -k disk.qcow2
           ls -la
 
       - name: Upload compressed disk image
