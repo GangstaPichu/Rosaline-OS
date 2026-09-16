@@ -126,17 +126,18 @@ that actually needs real Linux, and just boot the result locally:
    `format` input (`vmdk` or `qcow2`, see below), defaulting to `vmdk`.
 2. **Wait for both to finish**, then download the
    `rosaline-os-test-disk-vmdk` (or `-qcow2`) artifact from the second
-   workflow's run. It pulls the published image, converts it directly
-   with `bootc-image-builder` (needs privileged containers and loop
-   devices — real Linux, which is why this runs in CI rather than on
-   Windows) into whichever format you asked for, compresses it with
-   `pigz` (parallel gzip — same `.gz` format, just faster to produce on
-   a multi-core runner), and uploads it as a workflow artifact (~7 day
-   retention). It's a multi-GB download either way; compression cuts it
-   down some but budget time.
-3. **Download and decompress** the artifact. 7-Zip opens `.gz` directly,
-   or in PowerShell: `tar -xzf disk.vmdk.gz` (Windows 10 1803+ ships a
-   `tar.exe` that handles gzip).
+   workflow's run. It pulls the published image and converts it
+   directly with `bootc-image-builder` (needs privileged containers and
+   loop devices — real Linux, which is why this runs in CI rather than
+   on Windows) into whichever format you asked for, then uploads it
+   uncompressed. It's a multi-GB download either way; measured on a
+   real run, gzip only shaved 1.2% off this specific file (it's already
+   too dense — RPM payloads, binaries — to compress well), so there's no
+   real size upside to compressing it, only slower CI and an extra
+   decompression step for you.
+3. **Download the artifact.** It arrives as a `.zip` (GitHub wraps every
+   artifact that way) — extract it and you've got the raw `.vmdk` or
+   `.qcow2` directly, no further decompression needed.
 
 From here, pick one:
 

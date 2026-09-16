@@ -81,31 +81,29 @@ jobs:
             "${IMAGE_REGISTRY}/${IMAGE_NAME}:${TAG}"
           # bootc-image-builder writes as root (privileged container), so
           # output/<format>/ is root-owned -- the next step runs as the
-          # normal runner user and needs write access to create the .gz
-          # alongside it (found by actually running this with qcow2:
-          # "gzip: disk.qcow2.gz: Permission denied").
+          # normal runner user and needs read access to upload it (found
+          # by actually running an earlier version of this that also
+          # tried to write there: "gzip: disk.qcow2.gz: Permission
+          # denied").
           sudo chown -R "$(id -u):$(id -g)" output
           ls -la "output/${FORMAT}/"
 
-      - name: Compress the disk image
-        # Sparse but still compresses meaningfully -- worth the extra CI
-        # minutes to cut download time on the other end. pigz produces
-        # standard gzip output (opens natively in 7-Zip/Windows tar) but
-        # spreads the work across every core the runner has instead of
-        # gzip's single thread, which matters at this file's size
-        # (~6-7GB). The exact filename bootc-image-builder picks isn't
-        # documented, so glob for it rather than hardcoding one (same
-        # approach build-iso.yml already uses for its *.iso).
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pigz
-          cd "output/${FORMAT}"
-          pigz -k *
-          ls -la
-
-      - name: Upload compressed disk image
+      - name: Upload disk image
+        # No manual compression step here anymore -- measured on a real
+        # run (disk.qcow2 at 6,599,841,792 bytes -> disk.qcow2.gz at
+        # 6,520,050,761 bytes), gzip only shaved 1.2% off this file. The
+        # disk is already too dense (RPM payloads, binaries) to compress
+        # well, so a manual pigz pass was burning CI minutes for almost
+        # nothing. compression-level: 0 skips upload-artifact's own
+        # server-side zip compression too, for the same reason --
+        # GitHub's own docs recommend 0 "for large files that are not
+        # easily compressed, for significantly faster uploads". The
+        # exact filename bootc-image-builder picks isn't documented, so
+        # glob for it rather than hardcoding one (same approach
+        # build-iso.yml already uses for its *.iso).
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rosaline-os-test-disk-${{ env.FORMAT }}
-          path: output/${{ env.FORMAT }}/*.gz
+          path: output/${{ env.FORMAT }}/*
+          compression-level: 0
           retention-days: 7
